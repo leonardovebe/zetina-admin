@@ -231,7 +231,12 @@ async function uploadFoto(file, prendaId) {
   const ext  = file.name.split('.').pop().toLowerCase();
   const path = `prendas/${prendaId}/${Date.now()}.${ext}`;
   const { data, error } = await db.storage.from('prenda-fotos').upload(path, file, { contentType: file.type });
-  if (error) throw error;
+  if (error) {
+    console.error('[uploadFoto] Error completo de Supabase:', error);
+    console.error('[uploadFoto] Archivo:', file.name, '| Tamaño:', file.size, 'bytes | Tipo:', file.type);
+    console.error('[uploadFoto] Path destino:', path);
+    throw error;
+  }
   const { data: u } = db.storage.from('prenda-fotos').getPublicUrl(data.path);
   return u.publicUrl;
 }
@@ -262,20 +267,33 @@ async function handlePrendaSubmit(e) {
     if (error) throw error;
 
     let uploadErrors = 0;
+    const fotoErrorMsgs = [];
     for (const foto of selectedFotos) {
       try {
         const url = await uploadFoto(foto, prenda.id);
         await db.from('fotos_prendas').insert({ prenda_id: prenda.id, url });
-      } catch { uploadErrors++; }
+      } catch (fotoErr) {
+        uploadErrors++;
+        fotoErrorMsgs.push(`${foto.name}: ${fotoErr.message || JSON.stringify(fotoErr)}`);
+      }
     }
 
     selectedFotos = [];
     e.target.reset();
     renderFotoPreviews();
-    const msg = uploadErrors > 0
-      ? `Prenda guardada. ${uploadErrors} foto(s) no se subieron (verifica el bucket "prenda-fotos" en Supabase Storage).`
-      : `Prenda "${prenda.nombre}" guardada exitosamente.`;
-    showToast(msg, uploadErrors > 0 ? 'info' : 'success');
+
+    if (uploadErrors > 0) {
+      const errDetail = fotoErrorMsgs.join('\n');
+      console.error('[Subir Prendas] Errores al subir fotos:\n' + errDetail);
+      showToast(`Prenda guardada. ${uploadErrors} foto(s) no se subieron — revisa la consola (F12) para ver el error exacto.`, 'error');
+      // Show inline error below the form
+      const errEl = document.createElement('div');
+      errEl.className = 'upload-foto-error';
+      errEl.innerHTML = `<strong>Error al subir ${uploadErrors} foto(s):</strong><pre>${errDetail}</pre>`;
+      document.getElementById('prendaForm').appendChild(errEl);
+    } else {
+      showToast(`Prenda "${prenda.nombre}" guardada exitosamente.`);
+    }
 
   } catch (err) {
     showToast(err.message || 'Error al guardar la prenda', 'error');
@@ -668,20 +686,25 @@ async function guardarEditPrenda(id, hasExtras) {
 
     // Upload and register new fotos
     let uploadErrors = 0;
+    const fotoErrorMsgs = [];
     for (const file of _editFotosNuevas) {
       try {
         const url = await uploadFoto(file, id);
         await db.from('fotos_prendas').insert({ prenda_id: id, url });
-      } catch (e) {
-        console.warn('Error subiendo foto:', e.message);
+      } catch (fotoErr) {
         uploadErrors++;
+        fotoErrorMsgs.push(`${file.name}: ${fotoErr.message || JSON.stringify(fotoErr)}`);
       }
     }
 
     closeModal();
-    showToast(uploadErrors > 0
-      ? `Guardado. ${uploadErrors} foto(s) no se subieron.`
-      : 'Prenda actualizada correctamente.');
+    if (uploadErrors > 0) {
+      const errDetail = fotoErrorMsgs.join(' | ');
+      console.error('[Editar Prenda] Errores al subir fotos:\n' + fotoErrorMsgs.join('\n'));
+      showToast(`Guardado. ${uploadErrors} foto(s) fallaron: ${errDetail}`, 'error');
+    } else {
+      showToast('Prenda actualizada correctamente.');
+    }
     loadInventario();
 
   } catch (err) {
