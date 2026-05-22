@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZETINA Admin — Acceso</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#130016">
+</head>
+<body class="login-body">
+
+  <div class="login-container">
+
+    <!-- Brand -->
+    <div class="login-brand">
+      <div class="login-logo"><span class="logo-z">Z</span></div>
+      <h1 class="login-title">ZETINA</h1>
+      <p class="login-subtitle">Panel de Administración</p>
+    </div>
+
+    <!-- Aviso primer uso -->
+    <div id="setupBanner" class="setup-banner hidden">
+      No hay administradores configurados.
+      <a href="#" id="setupLink">Crear cuenta →</a>
+    </div>
+
+    <!-- Login -->
+    <form id="loginForm" class="login-form">
+      <div class="form-group">
+        <label for="loginUser">Usuario</label>
+        <input type="text" id="loginUser" autocomplete="username"
+               placeholder="Nombre de usuario" required>
+      </div>
+      <div class="form-group">
+        <label for="loginPass">Contraseña</label>
+        <div class="password-wrap">
+          <input type="password" id="loginPass" autocomplete="current-password"
+                 placeholder="Contraseña" required>
+          <button type="button" id="togglePw" class="toggle-pw" aria-label="Mostrar contraseña">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div id="loginErr" class="login-error hidden"></div>
+      <button type="submit" class="btn btn-primary btn-full" id="loginBtn">
+        Iniciar sesión
+      </button>
+    </form>
+
+    <!-- Setup (primer admin) -->
+    <form id="setupForm" class="login-form hidden">
+      <p style="font-weight:600;color:#fff;margin-bottom:-4px;">Crear primer administrador</p>
+      <div class="form-group">
+        <label>Nombre completo</label>
+        <input type="text" id="sNombre" required placeholder="Tu nombre">
+      </div>
+      <div class="form-group">
+        <label>Usuario</label>
+        <input type="text" id="sUser" required placeholder="ej: admin (sin espacios)">
+      </div>
+      <div class="form-group">
+        <label>Contraseña</label>
+        <input type="password" id="sPass" required placeholder="Mínimo 8 caracteres" minlength="8">
+      </div>
+      <div class="form-group">
+        <label>Confirmar contraseña</label>
+        <input type="password" id="sPassConf" required placeholder="Repite la contraseña">
+      </div>
+      <div id="setupErr" class="login-error hidden"></div>
+      <button type="submit" class="btn btn-primary btn-full" id="setupBtn">
+        Crear administrador
+      </button>
+      <button type="button" class="btn btn-outline btn-full" id="backLogin">
+        Volver al login
+      </button>
+    </form>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    // Si ya hay sesión, ir directo al dashboard
+    if (isLoggedIn()) location.href = 'dashboard.html';
+
+    // Verificar si existen admins
+    (async () => {
+      const { data } = await db.from('admins').select('id').limit(1);
+      if (!data || data.length === 0) {
+        document.getElementById('setupBanner').classList.remove('hidden');
+      }
+    })();
+
+    // ── Login ─────────────────────────────────────────────────────────────────
+    document.getElementById('loginForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = document.getElementById('loginBtn');
+      const err = document.getElementById('loginErr');
+      btn.disabled = true;
+      btn.textContent = 'Iniciando sesión…';
+      err.classList.add('hidden');
+
+      try {
+        await login(
+          document.getElementById('loginUser').value,
+          document.getElementById('loginPass').value
+        );
+        location.href = 'dashboard.html';
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Iniciar sesión';
+      }
+    });
+
+    // Toggle password visibility
+    document.getElementById('togglePw').addEventListener('click', () => {
+      const input = document.getElementById('loginPass');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    });
+
+    // ── Ir a setup ────────────────────────────────────────────────────────────
+    document.getElementById('setupLink').addEventListener('click', e => {
+      e.preventDefault();
+      document.getElementById('loginForm').classList.add('hidden');
+      document.getElementById('setupBanner').classList.add('hidden');
+      document.getElementById('setupForm').classList.remove('hidden');
+    });
+
+    document.getElementById('backLogin').addEventListener('click', () => {
+      document.getElementById('setupForm').classList.add('hidden');
+      document.getElementById('loginForm').classList.remove('hidden');
+    });
+
+    // ── Setup form ────────────────────────────────────────────────────────────
+    document.getElementById('setupForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = document.getElementById('setupBtn');
+      const err = document.getElementById('setupErr');
+
+      const pass = document.getElementById('sPass').value;
+      const conf = document.getElementById('sPassConf').value;
+
+      if (pass !== conf) {
+        err.textContent = 'Las contraseñas no coinciden.';
+        err.classList.remove('hidden');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Creando…';
+      err.classList.add('hidden');
+
+      try {
+        const username = document.getElementById('sUser').value.trim().toLowerCase();
+        const nombre   = document.getElementById('sNombre').value.trim();
+        const hash     = await hashPassword(pass);
+
+        const { error } = await db.from('admins').insert({ username, nombre, password_hash: hash });
+        if (error) throw error;
+
+        await login(username, pass);
+        location.href = 'dashboard.html';
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Crear administrador';
+      }
+    });
+  </script>
+</body>
+</html>

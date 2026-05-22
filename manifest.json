@@ -1,0 +1,13 @@
+{
+  "name": "ZETINA Admin",
+  "short_name": "ZETINA Admin",
+  "description": "Panel de administración ZETINA",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#130016",
+  "theme_color": "#130016",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
