@@ -30,8 +30,9 @@ function showToast(msg, type = 'success') {
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
-function openModal(html) {
+function openModal(html, wide = false) {
   document.getElementById('modalBody').innerHTML = html;
+  document.querySelector('.modal-box').classList.toggle('modal-box--lg', wide);
   document.getElementById('modalOverlay').classList.add('open');
 }
 
@@ -289,6 +290,8 @@ async function handlePrendaSubmit(e) {
 //  SECCIÓN: INVENTARIO
 // ══════════════════════════════════════════════════════════════════════════════
 let _invFilter = 'todas';
+let _editFotosExistentes = []; // [{id, url, deleted}]
+let _editFotosNuevas     = []; // File[]
 let _invSearch = '';
 let _invDebounce;
 
@@ -392,6 +395,7 @@ async function loadInventario() {
                 <td>${p.vendedoras?.nombre || '<span class="text-muted">Catálogo</span>'}</td>
                 <td>${estadoBadge(p)}</td>
                 <td class="td-actions">
+                  <button class="btn-sm btn-outline" onclick="abrirEditarPrenda('${p.id}')">Editar</button>
                   ${!p.baja
                     ? `<button class="btn-icon" title="${p.disponible ? 'Marcar vendida' : 'Marcar disponible'}"
                          onclick="toggleDisp('${p.id}',${p.disponible})">${p.disponible ? '✓' : '↩'}</button>
@@ -445,6 +449,246 @@ async function deletePrenda(id, nombre) {
   if (error) { showToast(error.message, 'error'); return; }
   showToast('Prenda eliminada');
   loadInventario();
+}
+
+async function abrirEditarPrenda(id) {
+  const { data: vendedoras } = await db.from('vendedoras').select('id, nombre').order('nombre');
+
+  // Try fetching with optional columns (numero, categoria); fall back if they don't exist yet
+  let p, hasExtras = true;
+  const fullSel = 'id, nombre, marca, categoria, numero, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, fotos_prendas(id, url)';
+  const safeSel = 'id, nombre, marca, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, fotos_prendas(id, url)';
+
+  let { data, error } = await db.from('prendas').select(fullSel).eq('id', id).single();
+  if (error && error.message.includes('does not exist')) {
+    hasExtras = false;
+    const res = await db.from('prendas').select(safeSel).eq('id', id).single();
+    if (res.error) { showToast(res.error.message, 'error'); return; }
+    p = { ...res.data, numero: null, categoria: null };
+  } else if (error) {
+    showToast(error.message, 'error'); return;
+  } else {
+    p = data;
+  }
+
+  _editFotosExistentes = (p.fotos_prendas || []).map(f => ({ id: f.id, url: f.url, deleted: false }));
+  _editFotosNuevas = [];
+
+  const estadoVal = p.baja ? 'baja' : p.disponible ? 'disponible' : 'vendida';
+
+  openModal(`
+    <div class="modal-header">
+      <h3>Editar prenda</h3>
+      <p class="text-muted">${p.nombre}</p>
+    </div>
+    <form id="editPrendaForm" class="modal-form">
+
+      <div class="edit-section">
+        <div class="form-section-title">Fotos</div>
+        <div id="editFotosGrid" class="edit-fotos-grid"></div>
+        <label class="btn btn-outline btn-sm edit-add-foto-label">
+          + Agregar fotos
+          <input type="file" id="editFotosInput" accept="image/*" multiple hidden>
+        </label>
+      </div>
+
+      <div class="edit-section">
+        <div class="form-section-title">Información</div>
+        <div class="form-grid">
+          ${hasExtras ? `<div class="form-group">
+            <label>ID</label>
+            <input type="text" id="eId" value="${p.numero || ''}" placeholder="Ej: ZT-001">
+          </div>` : ''}
+          <div class="form-group">
+            <label>Nombre *</label>
+            <input type="text" id="eNombre" required value="${p.nombre || ''}">
+          </div>
+          <div class="form-group">
+            <label>Marca</label>
+            <input type="text" id="eMarca" value="${p.marca || ''}">
+          </div>
+          ${hasExtras ? `<div class="form-group">
+            <label>Categoría</label>
+            <select id="eCategoria">
+              <option value="">Sin categoría</option>
+              ${CATEGORIAS.map(c => `<option value="${c}" ${p.categoria === c ? 'selected' : ''}>${c}</option>`).join('')}
+            </select>
+          </div>` : ''}
+          <div class="form-group">
+            <label>Vendedora</label>
+            <select id="eVendedora">
+              <option value="">Catálogo general</option>
+              ${(vendedoras || []).map(v => `<option value="${v.id}" ${p.vendedora_id === v.id ? 'selected' : ''}>${v.nombre}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="edit-section">
+        <div class="form-section-title">Tallas</div>
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>Talla etiqueta</label>
+            <input type="text" id="eTallaEtiqueta" value="${p.talla_etiqueta || ''}">
+          </div>
+          <div class="form-group">
+            <label>Talla real</label>
+            <input type="text" id="eTallaReal" value="${p.talla_real || ''}">
+          </div>
+        </div>
+      </div>
+
+      <div class="edit-section">
+        <div class="form-section-title">Precios</div>
+        <div class="form-grid form-grid-3">
+          <div class="form-group">
+            <label>Costo *</label>
+            <div class="input-prefix"><span>$</span>
+              <input type="number" id="eCosto" required min="0" step="0.01" value="${p.precio_costo || ''}">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Precio mínimo</label>
+            <div class="input-prefix"><span>$</span>
+              <input type="number" id="ePrecioMin" min="0" step="0.01" value="${p.precio_min || ''}">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Precio máximo</label>
+            <div class="input-prefix"><span>$</span>
+              <input type="number" id="ePrecioMax" min="0" step="0.01" value="${p.precio_max || ''}">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="edit-section">
+        <div class="form-section-title">Estado</div>
+        <div class="form-group" style="max-width:240px">
+          <label>Estado de la prenda</label>
+          <select id="eEstado">
+            <option value="disponible" ${estadoVal === 'disponible' ? 'selected' : ''}>Disponible</option>
+            <option value="vendida"    ${estadoVal === 'vendida'    ? 'selected' : ''}>Vendida</option>
+            <option value="baja"       ${estadoVal === 'baja'       ? 'selected' : ''}>Baja</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="btn btn-primary" id="editSubmitBtn">Guardar cambios</button>
+      </div>
+    </form>`, true);
+
+  _renderEditFotos();
+
+  document.getElementById('editFotosInput').addEventListener('change', e => {
+    const valid = Array.from(e.target.files).filter(f => f.type.startsWith('image/') && f.size <= 5 * 1024 * 1024);
+    if (valid.length < e.target.files.length) showToast('Algunas fotos superan 5 MB y fueron ignoradas.', 'info');
+    _editFotosNuevas = [..._editFotosNuevas, ...valid];
+    _renderEditFotos();
+    e.target.value = '';
+  });
+
+  document.getElementById('editPrendaForm').addEventListener('submit', e => {
+    e.preventDefault();
+    guardarEditPrenda(id, hasExtras);
+  });
+}
+
+function _renderEditFotos() {
+  const grid = document.getElementById('editFotosGrid');
+  if (!grid) return;
+
+  const existHtml = _editFotosExistentes.map((f, i) => `
+    <div class="edit-foto-item${f.deleted ? ' edit-foto-item--deleted' : ''}">
+      <img src="${f.url}" alt="">
+      <button type="button" class="edit-foto-del" data-i="${i}" data-type="exist" title="${f.deleted ? 'Deshacer' : 'Eliminar'}">
+        ${f.deleted ? '↩' : '×'}
+      </button>
+      ${f.deleted ? '<div class="edit-foto-overlay">Eliminar</div>' : ''}
+    </div>`).join('');
+
+  const newHtml = _editFotosNuevas.map((f, i) => `
+    <div class="edit-foto-item edit-foto-item--new">
+      <img src="${URL.createObjectURL(f)}" alt="${f.name}">
+      <button type="button" class="edit-foto-del" data-i="${i}" data-type="new" title="Quitar">×</button>
+      <div class="edit-foto-badge">Nueva</div>
+    </div>`).join('');
+
+  grid.innerHTML = existHtml + newHtml ||
+    '<p class="text-muted" style="font-size:0.8rem;margin:0">Sin fotos. Agrega con el botón de abajo.</p>';
+
+  grid.querySelectorAll('.edit-foto-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const i = +btn.dataset.i;
+      if (btn.dataset.type === 'exist') {
+        _editFotosExistentes[i].deleted = !_editFotosExistentes[i].deleted;
+      } else {
+        _editFotosNuevas.splice(i, 1);
+      }
+      _renderEditFotos();
+    });
+  });
+}
+
+async function guardarEditPrenda(id, hasExtras) {
+  const btn = document.getElementById('editSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Guardando…';
+
+  try {
+    const estadoVal = document.getElementById('eEstado').value;
+    const payload = {
+      nombre:         document.getElementById('eNombre').value.trim(),
+      marca:          document.getElementById('eMarca').value.trim()         || null,
+      vendedora_id:   document.getElementById('eVendedora').value            || null,
+      talla_etiqueta: document.getElementById('eTallaEtiqueta').value.trim() || null,
+      talla_real:     document.getElementById('eTallaReal').value.trim()     || null,
+      precio_costo:   parseFloat(document.getElementById('eCosto').value)    || 0,
+      precio_min:     parseFloat(document.getElementById('ePrecioMin').value) || 0,
+      precio_max:     parseFloat(document.getElementById('ePrecioMax').value) || 0,
+      disponible:     estadoVal === 'disponible',
+      baja:           estadoVal === 'baja',
+    };
+    if (hasExtras) {
+      payload.numero    = document.getElementById('eId').value.trim()    || null;
+      payload.categoria = document.getElementById('eCategoria').value    || null;
+    }
+
+    const { error: updErr } = await db.from('prendas').update(payload).eq('id', id);
+    if (updErr) throw updErr;
+
+    // Delete fotos marked for removal
+    const toDelete = _editFotosExistentes.filter(f => f.deleted).map(f => f.id);
+    if (toDelete.length) {
+      const { error: delErr } = await db.from('fotos_prendas').delete().in('id', toDelete);
+      if (delErr) console.warn('Error al eliminar fotos:', delErr.message);
+    }
+
+    // Upload and register new fotos
+    let uploadErrors = 0;
+    for (const file of _editFotosNuevas) {
+      try {
+        const url = await uploadFoto(file, id);
+        await db.from('fotos_prendas').insert({ prenda_id: id, url });
+      } catch (e) {
+        console.warn('Error subiendo foto:', e.message);
+        uploadErrors++;
+      }
+    }
+
+    closeModal();
+    showToast(uploadErrors > 0
+      ? `Guardado. ${uploadErrors} foto(s) no se subieron.`
+      : 'Prenda actualizada correctamente.');
+    loadInventario();
+
+  } catch (err) {
+    showToast(err.message || 'Error al guardar cambios', 'error');
+    btn.disabled = false;
+    btn.textContent = 'Guardar cambios';
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
