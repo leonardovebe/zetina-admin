@@ -1291,7 +1291,7 @@ document.addEventListener('DOMContentLoaded', () => {
   );
 
   document.getElementById('logoutBtn')?.addEventListener('click', () => {
-    if (confirm('¿Cerrar sesión?')) { logout(); location.href = 'index.html'; }
+    if (confirm('¿Cerrar sesión?')) { pinLogout(); }
   });
 
   document.getElementById('modalOverlay')?.addEventListener('click', e => {

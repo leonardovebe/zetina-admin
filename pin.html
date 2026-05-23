@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZETINA Admin — Acceso</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#F7F5FA">
+</head>
+<body class="pin-body">
+
+  <div class="pin-container">
+
+    <div class="pin-brand">
+      <img src="LOGOTIPOMORADOlimpio.png" alt="ZETINA" class="pin-logo-img">
+      <p class="pin-subtitle">Panel de Administración</p>
+    </div>
+
+    <!-- Setup (first time) -->
+    <div id="setupView" class="pin-card hidden">
+      <h2 class="pin-card-title">Crear PIN de acceso</h2>
+      <p class="pin-card-desc">Elige un PIN de 6 dígitos para proteger el panel. Solo se configura una vez.</p>
+
+      <div class="pin-field-group">
+        <label class="pin-label">Nuevo PIN</label>
+        <div class="pin-inputs" id="setupDigits"></div>
+      </div>
+      <div class="pin-field-group">
+        <label class="pin-label">Confirmar PIN</label>
+        <div class="pin-inputs" id="confirmDigits"></div>
+      </div>
+
+      <div id="setupErr" class="pin-error hidden"></div>
+      <button id="setupBtn" class="btn btn-primary btn-full" disabled>Guardar PIN</button>
+    </div>
+
+    <!-- Login -->
+    <div id="loginView" class="pin-card hidden">
+      <h2 class="pin-card-title">Ingresa tu PIN</h2>
+      <div class="pin-inputs" id="loginDigits"></div>
+      <div id="loginErr" class="pin-error hidden"></div>
+    </div>
+
+  </div>
+
+  <script>
+    'use strict';
+
+    async function sha256(str) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+    }
+
+    const PIN_HASH_KEY    = 'zetina_pin_hash';
+    const PIN_SESSION_KEY = 'zetina_pin_session';
+    const PIN_TTL         = 8 * 60 * 60 * 1000; // 8 horas
+
+    function isPinConfigured() { return !!localStorage.getItem(PIN_HASH_KEY); }
+
+    function isPinSessionValid() {
+      try {
+        const s = JSON.parse(sessionStorage.getItem(PIN_SESSION_KEY) || '{}');
+        return !!(s.expiry && Date.now() < s.expiry);
+      } catch { return false; }
+    }
+
+    function startSession() {
+      sessionStorage.setItem(PIN_SESSION_KEY, JSON.stringify({ expiry: Date.now() + PIN_TTL }));
+    }
+
+    // Si ya tiene sesión activa, ir directo al dashboard
+    if (isPinSessionValid()) { location.href = 'dashboard.html'; }
+
+    // ── Constructor de inputs PIN ─────────────────────────────────────────────
+    function buildPinInputs(containerId, onComplete) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      for (let i = 0; i < 6; i++) {
+        const inp = document.createElement('input');
+        inp.type         = 'password';
+        inp.inputMode    = 'numeric';
+        inp.className    = 'pin-digit';
+        inp.maxLength    = 1;
+        inp.autocomplete = 'off';
+        container.appendChild(inp);
+      }
+      const inputs = [...container.querySelectorAll('.pin-digit')];
+
+      inputs.forEach((inp, i) => {
+        inp.addEventListener('input', () => {
+          const v = inp.value.replace(/\D/g, '');
+          inp.value = v ? v[0] : '';
+          inp.classList.toggle('filled', !!inp.value);
+          if (inp.value && i < 5) inputs[i + 1].focus();
+          const pin = inputs.map(x => x.value).join('');
+          if (pin.length === 6) onComplete(pin);
+        });
+
+        inp.addEventListener('keydown', e => {
+          if (e.key === 'Backspace' && !inp.value && i > 0) {
+            inputs[i - 1].value = '';
+            inputs[i - 1].classList.remove('filled');
+            inputs[i - 1].focus();
+          }
+        });
+
+        inp.addEventListener('paste', e => {
+          e.preventDefault();
+          const digits = (e.clipboardData.getData('text') || '').replace(/\D/g,'').slice(0,6);
+          digits.split('').forEach((ch, j) => {
+            if (inputs[j]) { inputs[j].value = ch; inputs[j].classList.add('filled'); }
+          });
+          if (digits.length === 6) onComplete(digits);
+          else if (inputs[digits.length]) inputs[digits.length].focus();
+        });
+      });
+
+      inputs[0].focus();
+
+      return {
+        getValue : () => inputs.map(x => x.value).join(''),
+        clear    : () => { inputs.forEach(x => { x.value = ''; x.classList.remove('filled'); }); inputs[0].focus(); },
+        shake    : () => { container.classList.add('shake'); setTimeout(() => container.classList.remove('shake'), 450); }
+      };
+    }
+
+    // ── Mostrar vistas ────────────────────────────────────────────────────────
+    function showSetup() {
+      document.getElementById('loginView').classList.add('hidden');
+      document.getElementById('setupView').classList.remove('hidden');
+    }
+    function showLogin() {
+      document.getElementById('setupView').classList.add('hidden');
+      document.getElementById('loginView').classList.remove('hidden');
+    }
+
+    // ── Setup (primera vez) ───────────────────────────────────────────────────
+    let setupPinVal = '', confirmPinVal = '';
+
+    const setupCtrl = buildPinInputs('setupDigits', pin => {
+      setupPinVal = pin;
+      document.getElementById('setupErr').classList.add('hidden');
+      checkSetupReady();
+      if (confirmPinVal.length < 6) {
+        setTimeout(() => document.querySelector('#confirmDigits .pin-digit').focus(), 80);
+      }
+    });
+
+    const confirmCtrl = buildPinInputs('confirmDigits', pin => {
+      confirmPinVal = pin;
+      checkSetupReady();
+    });
+
+    function checkSetupReady() {
+      document.getElementById('setupBtn').disabled = setupPinVal.length < 6 || confirmPinVal.length < 6;
+    }
+
+    document.getElementById('setupBtn').addEventListener('click', async () => {
+      const err = document.getElementById('setupErr');
+      if (setupPinVal !== confirmPinVal) {
+        err.textContent = 'Los PINs no coinciden. Inténtalo de nuevo.';
+        err.classList.remove('hidden');
+        confirmCtrl.shake();
+        confirmCtrl.clear();
+        confirmPinVal = '';
+        checkSetupReady();
+        return;
+      }
+      localStorage.setItem(PIN_HASH_KEY, await sha256(setupPinVal));
+      startSession();
+      location.href = 'dashboard.html';
+    });
+
+    // ── Login ─────────────────────────────────────────────────────────────────
+    const loginCtrl = buildPinInputs('loginDigits', async pin => {
+      const storedHash = localStorage.getItem(PIN_HASH_KEY);
+      const inputHash  = await sha256(pin);
+      const err        = document.getElementById('loginErr');
+
+      if (inputHash === storedHash) {
+        startSession();
+        location.href = 'dashboard.html';
+      } else {
+        err.textContent = 'PIN incorrecto. Intenta de nuevo.';
+        err.classList.remove('hidden');
+        loginCtrl.shake();
+        loginCtrl.clear();
+      }
+    });
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    if (isPinConfigured()) showLogin(); else showSetup();
+  </script>
+
+</body>
+</html>

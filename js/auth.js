@@ -8,6 +8,7 @@ async function hashPassword(password) {
     .join('');
 }
 
+// ── Supabase admin auth (usado por index.html) ────────────────────────────────
 async function login(username, password) {
   const hash = await hashPassword(password);
   const { data, error } = await db
@@ -41,9 +42,24 @@ function isLoggedIn() {
   return getSession() !== null;
 }
 
+// ── PIN session auth (usado por dashboard.html) ───────────────────────────────
+const _PIN_SESSION_KEY = 'zetina_pin_session';
+
+function isPinSessionValid() {
+  try {
+    const s = JSON.parse(sessionStorage.getItem(_PIN_SESSION_KEY) || '{}');
+    return !!(s.expiry && Date.now() < s.expiry);
+  } catch { return false; }
+}
+
 function checkAuth() {
-  if (!isLoggedIn()) {
-    location.href = 'index.html';
-    throw new Error('No autenticado');
+  if (!isPinSessionValid()) {
+    location.href = 'pin.html';
+    throw new Error('Sesión no válida');
   }
+}
+
+function pinLogout() {
+  sessionStorage.removeItem(_PIN_SESSION_KEY);
+  location.href = 'pin.html';
 }
