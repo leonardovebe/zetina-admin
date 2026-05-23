@@ -26,6 +26,10 @@ alter table prendas add column if not exists baja      boolean not null default 
 -- ── Nivel en vendedoras ──────────────────────────────────────────────────────
 alter table vendedoras add column if not exists nivel text not null default 'Básico';
 
+-- ── Contraseña temporal en vendedoras ────────────────────────────────────────
+alter table vendedoras add column if not exists password_hash     text;
+alter table vendedoras add column if not exists password_temporal boolean not null default false;
+
 -- ═══════════════════════════════════════════════════════════════════════════
 --  Bucket de Storage
 --  Crear manualmente: Supabase Dashboard → Storage → New Bucket

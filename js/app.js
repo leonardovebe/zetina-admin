@@ -892,7 +892,7 @@ async function loadVendedoras() {
         <table class="data-table">
           <thead><tr>
             <th>Vendedora</th><th>Nivel</th><th>Teléfono</th>
-            <th>Email</th><th>Crédito</th><th>Registro</th><th>Acciones</th>
+            <th>Email</th><th>Crédito</th><th>Acceso</th><th>Registro</th><th>Acciones</th>
           </tr></thead>
           <tbody>
             ${vendedoras.map(v => `<tr>
@@ -908,6 +908,9 @@ async function loadVendedoras() {
               <td>${v.telefono || '—'}</td>
               <td>${v.email || '—'}</td>
               <td>${formatPeso(v.credito)}</td>
+              <td>${v.password_temporal
+                ? '<span class="badge badge-warning" title="Tiene contraseña temporal activa">🔑 Temporal</span>'
+                : '<span class="text-muted">—</span>'}</td>
               <td>${formatDate(v.created_at)}</td>
               <td class="td-actions">
                 <button class="btn-sm btn-outline" onclick="abrirFormVendedora('${v.id}')">Editar</button>
@@ -963,11 +966,29 @@ async function abrirFormVendedora(id = null) {
           </div>
         </div>
       </div>
+      <div class="form-group">
+        <label>Contraseña temporal${v ? ' — dejar vacío para no cambiar' : ''}</label>
+        <div class="password-wrap">
+          <input type="password" id="vPassword" autocomplete="new-password"
+            placeholder="${v ? 'Nueva contraseña (opcional)' : 'Contraseña de acceso para la vendedora'}">
+          <button type="button" class="toggle-pw" id="toggleVPw" tabindex="-1">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline" onclick="closeModal()">Cancelar</button>
         <button type="submit" class="btn btn-primary">${v ? 'Guardar cambios' : 'Crear vendedora'}</button>
       </div>
     </form>`);
+
+  document.getElementById('toggleVPw').addEventListener('click', () => {
+    const input = document.getElementById('vPassword');
+    input.type = input.type === 'password' ? 'text' : 'password';
+  });
 
   document.getElementById('vendForm').addEventListener('submit', async e => {
     e.preventDefault();
@@ -982,6 +1003,12 @@ async function abrirFormVendedora(id = null) {
       nivel:    document.getElementById('vNivel').value,
       credito:  parseFloat(document.getElementById('vCredito').value) || 0
     };
+
+    const pwVal = document.getElementById('vPassword').value;
+    if (pwVal) {
+      payload.password_hash     = await hashPassword(pwVal);
+      payload.password_temporal = true;
+    }
 
     const { error } = id
       ? await db.from('vendedoras').update(payload).eq('id', id)
