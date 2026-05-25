@@ -850,15 +850,21 @@ async function updateEstadoPedido(id, estado) {
   }
 
   if (estado === 'Entregado') {
+    console.log('[Zetina Admin] Marcando Entregado — pedido_id:', id);
+
     const { data: pedido, error: errPedido } = await db
       .from('pedidos')
       .select('vendedora_id, detalle_pedidos(prenda_id)')
       .eq('id', id)
       .single();
 
+    console.log('[Zetina Admin] Pedido leído:', pedido, '| Error:', errPedido);
+
     if (errPedido) { showToast(`Error leyendo pedido: ${errPedido.message}`, 'error'); return; }
 
     const prendaIds = (pedido.detalle_pedidos || []).map(d => d.prenda_id).filter(Boolean);
+    console.log('[Zetina Admin] prenda_ids del detalle:', prendaIds);
+    console.log('[Zetina Admin] vendedora_id del pedido:', pedido.vendedora_id);
 
     if (!prendaIds.length) {
       showToast('Entregado — sin prendas vinculadas en este pedido', 'warning');
@@ -874,7 +880,15 @@ async function updateEstadoPedido(id, estado) {
       estado: 'activo',
     }));
 
-    const { error: errInv } = await db.from('inventario_vendedoras').insert(registros);
+    console.log('[Zetina Admin] Registros a insertar en inventario_vendedoras:', registros);
+
+    const { data: invData, error: errInv } = await db
+      .from('inventario_vendedoras')
+      .insert(registros)
+      .select();
+
+    console.log('[Zetina Admin] Resultado insert inventario_vendedoras:', invData, '| Error:', errInv);
+
     if (errInv) { showToast(`Error registrando inventario: ${errInv.message}`, 'error'); return; }
 
     showToast(`Entregado — ${prendaIds.length} prenda${prendaIds.length > 1 ? 's' : ''} agregada${prendaIds.length > 1 ? 's' : ''} al inventario de la vendedora`);
