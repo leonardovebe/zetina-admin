@@ -718,6 +718,7 @@ async function guardarEditPrenda(id, hasExtras) {
 //  SECCIÓN: PEDIDOS
 // ══════════════════════════════════════════════════════════════════════════════
 let _pedidosEstado = '';
+let _pedidosPrendaIds = {};
 
 async function renderPedidos() {
   const main = document.getElementById('sectionContent');
@@ -749,13 +750,18 @@ async function loadPedidos() {
 
   try {
     let q = db.from('pedidos')
-      .select('id, numero, fecha, estado, created_at, vendedoras(nombre), detalle_pedidos(precio, nombre, marca, emoji)')
+      .select('id, numero, fecha, estado, created_at, vendedoras(nombre), detalle_pedidos(prenda_id, precio, nombre, marca, emoji)')
       .order('created_at', { ascending: false });
 
     if (_pedidosEstado) q = q.eq('estado', _pedidosEstado);
 
     const { data: pedidos, error } = await q;
     if (error) throw error;
+
+    _pedidosPrendaIds = {};
+    pedidos.forEach(p => {
+      _pedidosPrendaIds[p.id] = (p.detalle_pedidos || []).map(d => d.prenda_id).filter(Boolean);
+    });
 
     const statsEl = document.getElementById('pedidosStats');
     if (statsEl) {
@@ -795,8 +801,9 @@ async function loadPedidos() {
                     ${ESTADOS_PEDIDO.map(e => `<option value="${e}" ${e === p.estado ? 'selected' : ''}>${e}</option>`).join('')}
                   </select>
                 </td>
-                <td>
+                <td style="display:flex;gap:0.4rem;flex-wrap:wrap">
                   <button class="btn-sm btn-outline" onclick="verDetallePedido('${p.id}')">Ver detalle</button>
+                  <button class="btn-sm btn-danger" onclick="eliminarPedido('${p.id}')">Eliminar</button>
                 </td>
               </tr>`;
             }).join('')}
@@ -811,8 +818,27 @@ async function loadPedidos() {
 
 async function updateEstadoPedido(id, estado) {
   const { error } = await db.from('pedidos').update({ estado }).eq('id', id);
-  if (error) showToast(error.message, 'error');
-  else showToast(`Estado → ${estado}`);
+  if (error) { showToast(error.message, 'error'); return; }
+
+  if (estado === 'En camino') {
+    const ids = _pedidosPrendaIds[id] || [];
+    if (ids.length) await db.from('prendas').update({ disponible: false }).in('id', ids);
+  }
+
+  showToast(`Estado → ${estado}`);
+}
+
+async function eliminarPedido(id) {
+  if (!confirm('¿Eliminar este pedido? Las prendas volverán al catálogo.')) return;
+
+  const ids = _pedidosPrendaIds[id] || [];
+  if (ids.length) await db.from('prendas').update({ disponible: true }).in('id', ids);
+
+  const { error } = await db.from('pedidos').delete().eq('id', id);
+  if (error) { showToast(error.message, 'error'); return; }
+
+  showToast('Pedido eliminado');
+  loadPedidos();
 }
 
 async function verDetallePedido(pedidoId) {
