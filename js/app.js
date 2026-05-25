@@ -42,12 +42,13 @@ function closeModal() {
 
 // ── Navegación ────────────────────────────────────────────────────────────────
 const SECTION_TITLES = {
-  financiero: 'Resumen Financiero',
-  prendas:    'Subir Prendas',
-  inventario: 'Inventario',
-  pedidos:    'Pedidos',
-  vendedoras: 'Vendedoras',
-  clientes:   'Clientas'
+  financiero:   'Resumen Financiero',
+  prendas:      'Subir Prendas',
+  inventario:   'Inventario',
+  pedidos:      'Pedidos',
+  vendedoras:   'Vendedoras',
+  clientes:     'Clientas',
+  devoluciones: 'Devoluciones'
 };
 
 function navigate(section) {
@@ -64,7 +65,8 @@ function navigate(section) {
 
   const renders = { financiero: renderFinanciero, prendas: renderPrendas,
     inventario: renderInventario, pedidos: renderPedidos,
-    vendedoras: renderVendedoras, clientes: renderClientes };
+    vendedoras: renderVendedoras, clientes: renderClientes,
+    devoluciones: renderDevoluciones };
   if (renders[section]) renders[section]();
 }
 
@@ -1362,6 +1364,179 @@ async function renderFinanciero() {
 
   } catch (err) {
     main.innerHTML = `<div class="error-state">Error al cargar datos: ${err.message}</div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  SECCIÓN: DEVOLUCIONES
+// ══════════════════════════════════════════════════════════════════════════════
+let _devFiltro = 'Pendiente';
+const _devCache = new Map();
+
+async function renderDevoluciones() {
+  const main = document.getElementById('sectionContent');
+  main.innerHTML = `
+    <div class="section-toolbar">
+      <div class="filter-tabs" id="devTabs">
+        <button class="filter-tab active" data-filtro="Pendiente">Pendientes</button>
+        <button class="filter-tab" data-filtro="Aprobada">Aprobadas</button>
+        <button class="filter-tab" data-filtro="Rechazada">Rechazadas</button>
+        <button class="filter-tab" data-filtro="todas">Todas</button>
+      </div>
+    </div>
+    <div id="devStats" class="stats-row"></div>
+    <div id="devList"></div>`;
+
+  document.querySelectorAll('#devTabs .filter-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      _devFiltro = tab.dataset.filtro;
+      document.querySelectorAll('#devTabs .filter-tab').forEach(t =>
+        t.classList.toggle('active', t === tab)
+      );
+      loadDevoluciones();
+    });
+  });
+
+  await loadDevoluciones();
+}
+
+async function loadDevoluciones() {
+  const listEl = document.getElementById('devList');
+  if (!listEl) return;
+  listEl.innerHTML = '<div class="table-loading">Cargando…</div>';
+
+  try {
+    let q = db.from('devoluciones')
+      .select('*, vendedoras(id, nombre, telefono), prendas(id, nombre, precio_costo)')
+      .order('created_at', { ascending: false });
+
+    if (_devFiltro !== 'todas') q = q.eq('estado', _devFiltro);
+
+    const { data: devs, error } = await q;
+    if (error) throw error;
+
+    _devCache.clear();
+    devs.forEach(d => _devCache.set(d.id, d));
+
+    const statsEl = document.getElementById('devStats');
+    const pendientes = devs.filter(d => d.estado === 'Pendiente').length;
+    const aprobadas  = devs.filter(d => d.estado === 'Aprobada').length;
+    const rechazadas = devs.filter(d => d.estado === 'Rechazada').length;
+    statsEl.innerHTML = `
+      <div class="stat-chip accent"><span class="stat-num">${devs.length}</span><span class="stat-label">Total</span></div>
+      <div class="stat-chip warning"><span class="stat-num">${pendientes}</span><span class="stat-label">Pendientes</span></div>
+      <div class="stat-chip"><span class="stat-num">${aprobadas}</span><span class="stat-label">Aprobadas</span></div>
+      <div class="stat-chip muted"><span class="stat-num">${rechazadas}</span><span class="stat-label">Rechazadas</span></div>`;
+
+    if (!devs.length) {
+      listEl.innerHTML = '<div class="empty-state">No hay devoluciones que mostrar.</div>';
+      return;
+    }
+
+    listEl.innerHTML = `
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th>Vendedora</th><th>ID Prenda</th><th>Prenda</th>
+            <th>Motivo</th><th>Fecha</th><th>Estado</th><th>Acciones</th>
+          </tr></thead>
+          <tbody>
+            ${devs.map(d => {
+              const isPendiente = d.estado === 'Pendiente';
+              const badgeClass  = d.estado === 'Aprobada' ? 'success' : d.estado === 'Rechazada' ? 'danger' : 'warning';
+              return `<tr>
+                <td class="td-name">${d.vendedoras?.nombre || '—'}</td>
+                <td><span class="id-badge">${formatZtId(d.prenda_id)}</span></td>
+                <td>${d.prendas?.nombre || '—'}</td>
+                <td>${d.motivo || '—'}</td>
+                <td>${formatDate(d.created_at)}</td>
+                <td><span class="badge badge-${badgeClass}">${d.estado || '—'}</span></td>
+                <td class="td-actions">
+                  <button class="btn btn-sm btn-outline" onclick="contactarVendedora('${d.id}')">
+                    WhatsApp
+                  </button>
+                  ${isPendiente ? `
+                  <button class="btn btn-sm btn-primary" onclick="aprobarDevolucion('${d.id}')">
+                    Aprobar
+                  </button>
+                  <button class="btn btn-sm btn-danger" onclick="rechazarDevolucion('${d.id}')">
+                    Rechazar
+                  </button>` : ''}
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+
+  } catch (err) {
+    listEl.innerHTML = `<div class="error-state">Error al cargar devoluciones: ${err.message}</div>`;
+  }
+}
+
+function contactarVendedora(devId) {
+  const dev = _devCache.get(devId);
+  if (!dev) return;
+  const telefono = dev.vendedoras?.telefono;
+  if (!telefono) { showToast('Esta vendedora no tiene teléfono registrado', 'error'); return; }
+  const numero   = telefono.replace(/\D/g, '');
+  const prenda   = dev.prendas?.nombre || 'la prenda';
+  const msg      = encodeURIComponent(
+    `Hola ${dev.vendedoras?.nombre || ''}, te contactamos de ZETINA para coordinar la devolución de "${prenda}". ¿Puedes enviárnosla? Te decimos la dirección de envío. ¡Gracias!`
+  );
+  const destino = numero.startsWith('52') ? numero : `52${numero}`;
+  window.open(`https://wa.me/${destino}?text=${msg}`, '_blank');
+}
+
+async function aprobarDevolucion(devId) {
+  const dev = _devCache.get(devId);
+  if (!dev) return;
+  const nombrePrenda = dev.prendas?.nombre || 'esta prenda';
+  const costo        = dev.prendas?.precio_costo || 0;
+  if (!confirm(`¿Aprobar la devolución de "${nombrePrenda}"?\nSe acreditarán ${formatPeso(costo)} a la vendedora.`)) return;
+
+  try {
+    const { error: e1 } = await db.from('devoluciones')
+      .update({ estado: 'Aprobada' }).eq('id', devId);
+    if (e1) throw e1;
+
+    const { error: e2 } = await db.from('prendas')
+      .update({ disponible: true, baja: false }).eq('id', dev.prenda_id);
+    if (e2) throw e2;
+
+    const { error: e3 } = await db.from('inventario_vendedoras')
+      .delete().eq('prenda_id', dev.prenda_id);
+    if (e3) throw e3;
+
+    const { data: vend, error: e4 } = await db.from('vendedoras')
+      .select('credito').eq('id', dev.vendedora_id).single();
+    if (e4) throw e4;
+
+    const { error: e5 } = await db.from('vendedoras')
+      .update({ credito: (vend.credito || 0) + costo }).eq('id', dev.vendedora_id);
+    if (e5) throw e5;
+
+    showToast(`Devolución aprobada. Se acreditaron ${formatPeso(costo)} a la vendedora.`);
+    loadDevoluciones();
+  } catch (err) {
+    showToast(`Error: ${err.message}`, 'error');
+  }
+}
+
+async function rechazarDevolucion(devId) {
+  const dev = _devCache.get(devId);
+  if (!dev) return;
+  const nombrePrenda = dev.prendas?.nombre || 'esta prenda';
+  if (!confirm(`¿Rechazar la devolución de "${nombrePrenda}"?\nLa prenda no regresará al inventario.`)) return;
+
+  try {
+    const { error } = await db.from('devoluciones')
+      .update({ estado: 'Rechazada' }).eq('id', devId);
+    if (error) throw error;
+    showToast('Devolución rechazada.');
+    loadDevoluciones();
+  } catch (err) {
+    showToast(`Error: ${err.message}`, 'error');
   }
 }
 
