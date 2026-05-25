@@ -762,6 +762,7 @@ async function loadPedidos() {
     pedidos.forEach(p => {
       _pedidosPrendaIds[p.id] = (p.detalle_pedidos || []).map(d => d.prenda_id).filter(Boolean);
     });
+    console.log('[Zetina] _pedidosPrendaIds cargados:', _pedidosPrendaIds);
 
     const statsEl = document.getElementById('pedidosStats');
     if (statsEl) {
@@ -817,16 +818,28 @@ async function loadPedidos() {
 }
 
 async function updateEstadoPedido(id, estado) {
+  console.log('[Zetina] updateEstadoPedido →', { id, estado });
+
   const { error } = await db.from('pedidos').update({ estado }).eq('id', id);
   if (error) { showToast(error.message, 'error'); return; }
 
   if (estado === 'En camino') {
     const ids = _pedidosPrendaIds[id] || [];
+    console.log('[Zetina] prendaIds para este pedido:', ids);
+
     if (!ids.length) {
       showToast('Estado actualizado (pedido sin prendas vinculadas)', 'warning');
       return;
     }
-    const { error: errPrendas } = await db.from('prendas').update({ disponible: false }).in('id', ids);
+
+    const { data, error: errPrendas } = await db
+      .from('prendas')
+      .update({ disponible: false })
+      .in('id', ids)
+      .select('id, disponible');
+
+    console.log('[Zetina] resultado update prendas:', { data, error: errPrendas });
+
     if (errPrendas) {
       showToast(`Estado guardado, pero error al ocultar prendas: ${errPrendas.message}`, 'error');
       return;
