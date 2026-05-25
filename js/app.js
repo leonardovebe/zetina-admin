@@ -3,7 +3,7 @@
 // ── Constantes ────────────────────────────────────────────────────────────────
 const CATEGORIAS     = ['Blusa','Pantalón','Vestido','Falda','Chamarra','Conjunto','Sudadera','Short','Zapatos','Bolsa','Accesorio','Otro'];
 const NIVELES        = ['Básico','Silver','Gold','Platinum'];
-const ESTADOS_PEDIDO = ['En proceso','En camino','Entregado'];
+const ESTADOS_PEDIDO = ['En proceso','Pagado','En camino','Entregado'];
 
 // ── Utilidades ────────────────────────────────────────────────────────────────
 function formatPeso(n) {
@@ -770,6 +770,7 @@ async function loadPedidos() {
       pedidos.forEach(p => { if (counts[p.estado] !== undefined) counts[p.estado]++; });
       statsEl.innerHTML = `
         <div class="stat-chip warning"><span class="stat-num">${counts['En proceso']}</span><span class="stat-label">En proceso</span></div>
+        <div class="stat-chip info"><span class="stat-num">${counts['Pagado']}</span><span class="stat-label">Pagados</span></div>
         <div class="stat-chip"><span class="stat-num">${counts['En camino']}</span><span class="stat-label">En camino</span></div>
         <div class="stat-chip accent"><span class="stat-num">${counts['Entregado']}</span><span class="stat-label">Entregados</span></div>`;
     }
@@ -790,7 +791,7 @@ async function loadPedidos() {
             ${pedidos.map(p => {
               const total  = (p.detalle_pedidos || []).reduce((s, d) => s + (d.precio || 0), 0);
               const items  = (p.detalle_pedidos || []).length;
-              const badgeClass = { 'En proceso': 'warning', 'En camino': 'info', 'Entregado': 'success' }[p.estado] || 'muted';
+              const badgeClass = { 'En proceso': 'warning', 'Pagado': 'info', 'En camino': 'muted', 'Entregado': 'success' }[p.estado] || 'muted';
               return `<tr>
                 <td><span class="id-badge">${p.numero || formatZtId(p.id)}</span></td>
                 <td>${p.vendedoras?.nombre || '—'}</td>
@@ -818,42 +819,32 @@ async function loadPedidos() {
 }
 
 async function updateEstadoPedido(id, estado) {
-  console.log('[Zetina] 1. Cambiando estado del pedido:', { id, estado });
-
   const { error } = await db.from('pedidos').update({ estado }).eq('id', id);
-  if (error) { console.error('[Zetina] Error actualizando pedido:', error); showToast(error.message, 'error'); return; }
-  console.log('[Zetina] 2. Estado del pedido actualizado OK');
+  if (error) { showToast(error.message, 'error'); return; }
 
-  if (estado === 'En camino') {
+  if (estado === 'Pagado') {
     const { data: detalles, error: errDetalles } = await db
       .from('detalle_pedidos')
       .select('prenda_id')
       .eq('pedido_id', id);
 
-    console.log('[Zetina] 3. detalle_pedidos obtenidos:', detalles, 'error:', errDetalles);
-
     if (errDetalles) { showToast(`Error leyendo detalles: ${errDetalles.message}`, 'error'); return; }
 
     const prendaIds = (detalles || []).map(d => d.prenda_id).filter(Boolean);
-    console.log('[Zetina] 4. prenda_ids a actualizar:', prendaIds);
 
     if (!prendaIds.length) {
-      showToast('Estado actualizado (ninguna prenda vinculada en este pedido)', 'warning');
+      showToast('Pagado — sin prendas vinculadas en este pedido', 'warning');
       return;
     }
 
-    const { data: actualizadas, error: errPrendas } = await db
+    const { error: errPrendas } = await db
       .from('prendas')
       .update({ disponible: false })
-      .in('id', prendaIds)
-      .select('id, nombre, disponible');
-
-    console.log('[Zetina] 5. Prendas actualizadas:', actualizadas, 'error:', errPrendas);
+      .in('id', prendaIds);
 
     if (errPrendas) { showToast(`Error actualizando prendas: ${errPrendas.message}`, 'error'); return; }
 
-    showToast(`En camino — ${prendaIds.length} prenda${prendaIds.length > 1 ? 's' : ''} ocultada${prendaIds.length > 1 ? 's' : ''} del catálogo`);
-
+    showToast(`Pagado — ${prendaIds.length} prenda${prendaIds.length > 1 ? 's' : ''} marcada${prendaIds.length > 1 ? 's' : ''} como vendida${prendaIds.length > 1 ? 's' : ''}`);
     if (document.getElementById('invList')) loadInventario();
     return;
   }
