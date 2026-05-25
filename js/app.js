@@ -853,6 +853,8 @@ async function updateEstadoPedido(id, estado) {
     if (errPrendas) { showToast(`Error actualizando prendas: ${errPrendas.message}`, 'error'); return; }
 
     showToast(`En camino — ${prendaIds.length} prenda${prendaIds.length > 1 ? 's' : ''} ocultada${prendaIds.length > 1 ? 's' : ''} del catálogo`);
+
+    if (document.getElementById('invList')) loadInventario();
     return;
   }
 
