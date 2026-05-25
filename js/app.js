@@ -822,7 +822,17 @@ async function updateEstadoPedido(id, estado) {
 
   if (estado === 'En camino') {
     const ids = _pedidosPrendaIds[id] || [];
-    if (ids.length) await db.from('prendas').update({ disponible: false }).in('id', ids);
+    if (!ids.length) {
+      showToast('Estado actualizado (pedido sin prendas vinculadas)', 'warning');
+      return;
+    }
+    const { error: errPrendas } = await db.from('prendas').update({ disponible: false }).in('id', ids);
+    if (errPrendas) {
+      showToast(`Estado guardado, pero error al ocultar prendas: ${errPrendas.message}`, 'error');
+      return;
+    }
+    showToast(`En camino — ${ids.length} prenda${ids.length > 1 ? 's' : ''} ocultada${ids.length > 1 ? 's' : ''} del catálogo`);
+    return;
   }
 
   showToast(`Estado → ${estado}`);
