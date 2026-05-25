@@ -818,33 +818,41 @@ async function loadPedidos() {
 }
 
 async function updateEstadoPedido(id, estado) {
-  console.log('[Zetina] updateEstadoPedido →', { id, estado });
+  console.log('[Zetina] 1. Cambiando estado del pedido:', { id, estado });
 
   const { error } = await db.from('pedidos').update({ estado }).eq('id', id);
-  if (error) { showToast(error.message, 'error'); return; }
+  if (error) { console.error('[Zetina] Error actualizando pedido:', error); showToast(error.message, 'error'); return; }
+  console.log('[Zetina] 2. Estado del pedido actualizado OK');
 
   if (estado === 'En camino') {
-    const ids = _pedidosPrendaIds[id] || [];
-    console.log('[Zetina] prendaIds para este pedido:', ids);
+    const { data: detalles, error: errDetalles } = await db
+      .from('detalle_pedidos')
+      .select('prenda_id')
+      .eq('pedido_id', id);
 
-    if (!ids.length) {
-      showToast('Estado actualizado (pedido sin prendas vinculadas)', 'warning');
+    console.log('[Zetina] 3. detalle_pedidos obtenidos:', detalles, 'error:', errDetalles);
+
+    if (errDetalles) { showToast(`Error leyendo detalles: ${errDetalles.message}`, 'error'); return; }
+
+    const prendaIds = (detalles || []).map(d => d.prenda_id).filter(Boolean);
+    console.log('[Zetina] 4. prenda_ids a actualizar:', prendaIds);
+
+    if (!prendaIds.length) {
+      showToast('Estado actualizado (ninguna prenda vinculada en este pedido)', 'warning');
       return;
     }
 
-    const { data, error: errPrendas } = await db
+    const { data: actualizadas, error: errPrendas } = await db
       .from('prendas')
       .update({ disponible: false })
-      .in('id', ids)
-      .select('id, disponible');
+      .in('id', prendaIds)
+      .select('id, nombre, disponible');
 
-    console.log('[Zetina] resultado update prendas:', { data, error: errPrendas });
+    console.log('[Zetina] 5. Prendas actualizadas:', actualizadas, 'error:', errPrendas);
 
-    if (errPrendas) {
-      showToast(`Estado guardado, pero error al ocultar prendas: ${errPrendas.message}`, 'error');
-      return;
-    }
-    showToast(`En camino — ${ids.length} prenda${ids.length > 1 ? 's' : ''} ocultada${ids.length > 1 ? 's' : ''} del catálogo`);
+    if (errPrendas) { showToast(`Error actualizando prendas: ${errPrendas.message}`, 'error'); return; }
+
+    showToast(`En camino — ${prendaIds.length} prenda${prendaIds.length > 1 ? 's' : ''} ocultada${prendaIds.length > 1 ? 's' : ''} del catálogo`);
     return;
   }
 
