@@ -849,6 +849,38 @@ async function updateEstadoPedido(id, estado) {
     return;
   }
 
+  if (estado === 'Entregado') {
+    const { data: pedido, error: errPedido } = await db
+      .from('pedidos')
+      .select('vendedora_id, detalle_pedidos(prenda_id)')
+      .eq('id', id)
+      .single();
+
+    if (errPedido) { showToast(`Error leyendo pedido: ${errPedido.message}`, 'error'); return; }
+
+    const prendaIds = (pedido.detalle_pedidos || []).map(d => d.prenda_id).filter(Boolean);
+
+    if (!prendaIds.length) {
+      showToast('Entregado — sin prendas vinculadas en este pedido', 'warning');
+      return;
+    }
+
+    const fechaHoy = new Date().toISOString().split('T')[0];
+    const registros = prendaIds.map(prenda_id => ({
+      vendedora_id: pedido.vendedora_id,
+      prenda_id,
+      pedido_id: id,
+      fecha_entrega: fechaHoy,
+      estado: 'activo',
+    }));
+
+    const { error: errInv } = await db.from('inventario_vendedoras').insert(registros);
+    if (errInv) { showToast(`Error registrando inventario: ${errInv.message}`, 'error'); return; }
+
+    showToast(`Entregado — ${prendaIds.length} prenda${prendaIds.length > 1 ? 's' : ''} agregada${prendaIds.length > 1 ? 's' : ''} al inventario de la vendedora`);
+    return;
+  }
+
   showToast(`Estado → ${estado}`);
 }
 
