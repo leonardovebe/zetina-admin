@@ -73,7 +73,8 @@ function navigate(section) {
 // ══════════════════════════════════════════════════════════════════════════════
 //  SECCIÓN: SUBIR PRENDAS
 // ══════════════════════════════════════════════════════════════════════════════
-let selectedFotos = [];
+let selectedFotosPrenda   = [];
+let selectedFotosEtiqueta = [];
 
 async function renderPrendas() {
   const main = document.getElementById('sectionContent');
@@ -83,19 +84,54 @@ async function renderPrendas() {
     <div class="upload-form-container">
       <form id="prendaForm" class="prenda-form">
 
+        <!-- Fotos de la prenda (se suben a Supabase) -->
         <div class="form-section">
-          <div class="form-section-title">Fotos</div>
-          <div class="photo-upload-area" id="photoArea">
-            <input type="file" id="fotosInput" accept="image/*" multiple hidden>
-            <div class="photo-upload-placeholder" id="photoPlaceholder">
+          <div class="form-section-title">
+            Fotos de la prenda
+            <span class="foto-section-badge">Se publican en el catálogo</span>
+          </div>
+          <div class="photo-upload-area" id="photoAreaPrenda">
+            <input type="file" id="fotosInputPrenda" accept="image/*" multiple hidden>
+            <div class="photo-upload-placeholder" id="photoPlaceholderPrenda">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
               </svg>
               <p>Arrastra fotos aquí o <span>selecciona archivos</span></p>
               <p class="text-muted">JPG, PNG, WEBP — Máx 5 MB por foto</p>
             </div>
-            <div class="photo-previews" id="photoPreviews"></div>
+            <div class="photo-previews" id="photoPreviewsPrenda"></div>
           </div>
+        </div>
+
+        <!-- Fotos de etiquetas (solo para IA, no se guardan) -->
+        <div class="form-section">
+          <div class="form-section-title">
+            Fotos de etiquetas
+            <span class="foto-section-badge foto-section-badge--ia">Solo para análisis de IA</span>
+          </div>
+          <div class="photo-upload-area photo-upload-area--etiqueta" id="photoAreaEtiqueta">
+            <input type="file" id="fotosInputEtiqueta" accept="image/*" multiple hidden>
+            <div class="photo-upload-placeholder" id="photoPlaceholderEtiqueta">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="3" y="6" width="18" height="13" rx="2"/>
+                <path d="M3 10h18M8 6V4M16 6V4"/>
+              </svg>
+              <p>Fotos de etiquetas con talla, composición y cuidado</p>
+              <p class="text-muted">No se guardan — solo se analizan con IA</p>
+            </div>
+            <div class="photo-previews" id="photoPreviewsEtiqueta"></div>
+          </div>
+        </div>
+
+        <!-- Botón Generar con IA -->
+        <div class="ia-btn-row">
+          <button type="button" id="btnGenerarIA" class="btn-ia" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+            </svg>
+            Generar con IA
+          </button>
+          <span class="ia-hint">Analiza las fotos y rellena el formulario automáticamente</span>
         </div>
 
         <div class="form-section">
@@ -112,6 +148,10 @@ async function renderPrendas() {
             <div class="form-group">
               <label>Marca</label>
               <input type="text" id="fMarca" placeholder="Ej: Shein, Zara…">
+            </div>
+            <div class="form-group">
+              <label>Color</label>
+              <input type="text" id="fColor" placeholder="Ej: Negro, Rosa, Multicolor">
             </div>
             <div class="form-group">
               <label>Categoría</label>
@@ -206,14 +246,18 @@ async function renderPrendas() {
       </form>
     </div>`;
 
-  selectedFotos = [];
-  bindPhotoUpload();
+  selectedFotosPrenda   = [];
+  selectedFotosEtiqueta = [];
+  bindPhotoSection('photoAreaPrenda',   'fotosInputPrenda',   'photoPreviewsPrenda',   selectedFotosPrenda,   renderPrendaPreviews);
+  bindPhotoSection('photoAreaEtiqueta', 'fotosInputEtiqueta', 'photoPreviewsEtiqueta', selectedFotosEtiqueta, renderEtiquetaPreviews);
+  document.getElementById('btnGenerarIA').addEventListener('click', handleGenerarIA);
   document.getElementById('prendaForm').addEventListener('submit', handlePrendaSubmit);
 }
 
-function bindPhotoUpload() {
-  const area   = document.getElementById('photoArea');
-  const input  = document.getElementById('fotosInput');
+function bindPhotoSection(areaId, inputId, previewsId, store, renderFn) {
+  const area  = document.getElementById(areaId);
+  const input = document.getElementById(inputId);
+  if (!area || !input) return;
 
   area.addEventListener('click', () => input.click());
   area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('drag-over'); });
@@ -221,28 +265,30 @@ function bindPhotoUpload() {
   area.addEventListener('drop', e => {
     e.preventDefault();
     area.classList.remove('drag-over');
-    addFotos(e.dataTransfer.files);
+    _addFotosTo(e.dataTransfer.files, store, renderFn);
   });
-  input.addEventListener('change', () => addFotos(input.files));
+  input.addEventListener('change', () => { _addFotosTo(input.files, store, renderFn); input.value = ''; });
 }
 
-function addFotos(files) {
+function _addFotosTo(files, store, renderFn) {
   const valid = Array.from(files).filter(f => f.type.startsWith('image/') && f.size <= 5 * 1024 * 1024);
   if (valid.length < files.length) showToast('Algunas fotos superan 5 MB y fueron ignoradas.', 'info');
-  selectedFotos = [...selectedFotos, ...valid];
-  renderFotoPreviews();
+  store.push(...valid);
+  renderFn();
+  updateIAButton();
 }
 
-function renderFotoPreviews() {
-  const container   = document.getElementById('photoPreviews');
-  const placeholder = document.getElementById('photoPlaceholder');
-  if (selectedFotos.length === 0) {
-    placeholder.style.display = '';
+function _renderPhotoArea(store, previewsId, placeholderId, renderFn) {
+  const container   = document.getElementById(previewsId);
+  const placeholder = document.getElementById(placeholderId);
+  if (!container) return;
+  if (store.length === 0) {
+    if (placeholder) placeholder.style.display = '';
     container.innerHTML = '';
     return;
   }
-  placeholder.style.display = 'none';
-  container.innerHTML = selectedFotos.map((f, i) => `
+  if (placeholder) placeholder.style.display = 'none';
+  container.innerHTML = store.map((f, i) => `
     <div class="photo-preview-item">
       <img src="${URL.createObjectURL(f)}" alt="${f.name}">
       <button type="button" class="photo-remove-btn" data-i="${i}">×</button>
@@ -250,10 +296,93 @@ function renderFotoPreviews() {
   container.querySelectorAll('.photo-remove-btn').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      selectedFotos.splice(+btn.dataset.i, 1);
-      renderFotoPreviews();
+      store.splice(+btn.dataset.i, 1);
+      renderFn();
+      updateIAButton();
     });
   });
+}
+
+function renderPrendaPreviews()   { _renderPhotoArea(selectedFotosPrenda,   'photoPreviewsPrenda',   'photoPlaceholderPrenda',   renderPrendaPreviews);   }
+function renderEtiquetaPreviews() { _renderPhotoArea(selectedFotosEtiqueta, 'photoPreviewsEtiqueta', 'photoPlaceholderEtiqueta', renderEtiquetaPreviews); }
+
+function updateIAButton() {
+  const btn = document.getElementById('btnGenerarIA');
+  if (!btn) return;
+  const hasPhotos = selectedFotosPrenda.length > 0 || selectedFotosEtiqueta.length > 0;
+  btn.disabled = !hasPhotos || btn.classList.contains('loading');
+}
+
+function _resizeForAI(file) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1024;
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({ data: reader.result.split(',')[1], mediaType: 'image/jpeg' });
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', 0.82);
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function handleGenerarIA() {
+  const btn = document.getElementById('btnGenerarIA');
+  btn.classList.add('loading');
+  btn.disabled = true;
+  const originalHTML = btn.innerHTML;
+  btn.innerHTML = `<span class="spinner-sm"></span> Analizando…`;
+
+  try {
+    const images = [];
+    for (const file of selectedFotosPrenda) {
+      const img = await _resizeForAI(file);
+      images.push({ type: 'prenda', ...img });
+    }
+    for (const file of selectedFotosEtiqueta) {
+      const img = await _resizeForAI(file);
+      images.push({ type: 'etiqueta', ...img });
+    }
+
+    const res = await fetch('/api/generar-descripcion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ images }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Error ${res.status}`);
+    }
+
+    const r = await res.json();
+
+    if (r.nombre)             document.getElementById('fNombre').value       = r.nombre;
+    if (r.marca)              document.getElementById('fMarca').value        = r.marca;
+    if (r.color)              document.getElementById('fColor').value        = r.color;
+    if (r.talla)              document.getElementById('fTallaEtiqueta').value = r.talla;
+    if (r.material)           document.getElementById('fMaterial').value     = r.material;
+    if (r.composicion)        document.getElementById('fComposicion').value  = r.composicion;
+    if (r.cuidado)            document.getElementById('fCuidado').value      = r.cuidado;
+    if (r.descripcion_general)document.getElementById('fDescGeneral').value  = r.descripcion_general;
+    if (r.como_usar)          document.getElementById('fComoUsar').value     = r.como_usar;
+
+    showToast('¡Campos llenados con IA! Revisa y edita antes de guardar.', 'success');
+  } catch (err) {
+    showToast(err.message || 'Error al conectar con la IA', 'error');
+  } finally {
+    btn.classList.remove('loading');
+    btn.innerHTML = originalHTML;
+    updateIAButton();
+  }
 }
 
 async function uploadFoto(file, prendaId) {
@@ -288,6 +417,7 @@ async function handlePrendaSubmit(e) {
       numero:         document.getElementById('fId').value.trim(),
       nombre:         document.getElementById('fNombre').value.trim(),
       marca:          document.getElementById('fMarca').value.trim()        || null,
+      color:          document.getElementById('fColor').value.trim()        || null,
       categoria:      document.getElementById('fCategoria').value           || null,
       vendedora_id:   document.getElementById('fVendedora').value           || null,
       talla_etiqueta: document.getElementById('fTallaEtiqueta').value.trim()|| null,
@@ -305,7 +435,7 @@ async function handlePrendaSubmit(e) {
 
     let uploadErrors = 0;
     const fotoErrorMsgs = [];
-    for (const foto of selectedFotos) {
+    for (const foto of selectedFotosPrenda) {
       try {
         const url = await uploadFoto(foto, prenda.id);
         await db.from('fotos_prendas').insert({ prenda_id: prenda.id, url });
@@ -315,9 +445,12 @@ async function handlePrendaSubmit(e) {
       }
     }
 
-    selectedFotos = [];
+    selectedFotosPrenda   = [];
+    selectedFotosEtiqueta = [];
     e.target.reset();
-    renderFotoPreviews();
+    renderPrendaPreviews();
+    renderEtiquetaPreviews();
+    updateIAButton();
 
     if (uploadErrors > 0) {
       const errDetail = fotoErrorMsgs.join('\n');
@@ -511,8 +644,8 @@ async function abrirEditarPrenda(id) {
 
   // Try fetching with optional columns (numero, categoria); fall back if they don't exist yet
   let p, hasExtras = true;
-  const fullSel = 'id, nombre, marca, categoria, numero, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
-  const safeSel = 'id, nombre, marca, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
+  const fullSel = 'id, nombre, marca, color, categoria, numero, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
+  const safeSel = 'id, nombre, marca, color, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
 
   let { data, error } = await db.from('prendas').select(fullSel).eq('id', id).single();
   if (error && error.message.includes('does not exist')) {
@@ -562,6 +695,10 @@ async function abrirEditarPrenda(id) {
           <div class="form-group">
             <label>Marca</label>
             <input type="text" id="eMarca" value="${p.marca || ''}">
+          </div>
+          <div class="form-group">
+            <label>Color</label>
+            <input type="text" id="eColor" value="${escHtml(p.color)}" placeholder="Ej: Negro, Rosa, Multicolor">
           </div>
           ${hasExtras ? `<div class="form-group">
             <label>Categoría</label>
@@ -732,6 +869,7 @@ async function guardarEditPrenda(id, hasExtras) {
     const payload = {
       nombre:         document.getElementById('eNombre').value.trim(),
       marca:          document.getElementById('eMarca').value.trim()         || null,
+      color:          document.getElementById('eColor').value.trim()         || null,
       vendedora_id:   document.getElementById('eVendedora').value            || null,
       talla_etiqueta: document.getElementById('eTallaEtiqueta').value.trim() || null,
       talla_real:     document.getElementById('eTallaReal').value.trim()     || null,
