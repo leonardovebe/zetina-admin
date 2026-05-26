@@ -163,9 +163,16 @@ img { max-width: 100%; display: block; }
 
 .form-group input::placeholder { color: rgba(123,107,141,0.5); }
 .form-group input:focus,
-.form-group select:focus {
+.form-group select:focus,
+.form-group textarea:focus {
   border-color: var(--purple);
   box-shadow: 0 0 0 3px rgba(133,90,162,0.1);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 88px;
+  line-height: 1.5;
 }
 
 .form-group select {
@@ -708,6 +715,17 @@ img { max-width: 100%; display: block; }
   color: var(--purple);
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
+}
+
+.form-section-subtitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border);
 }
 
 .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }

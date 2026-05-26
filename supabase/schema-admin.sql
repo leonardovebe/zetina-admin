@@ -19,9 +19,10 @@ drop policy if exists "Enable read access for all users" on admins;
 drop policy if exists "Enable insert for all users" on admins;
 
 -- ── Columnas nuevas en prendas ───────────────────────────────────────────────
-alter table prendas add column if not exists numero    text;
-alter table prendas add column if not exists categoria text;
-alter table prendas add column if not exists baja      boolean not null default false;
+alter table prendas add column if not exists numero      text;
+alter table prendas add column if not exists categoria   text;
+alter table prendas add column if not exists baja        boolean not null default false;
+alter table prendas add column if not exists descripcion text;
 
 -- ── Nivel en vendedoras ──────────────────────────────────────────────────────
 alter table vendedoras add column if not exists nivel text not null default 'Básico';

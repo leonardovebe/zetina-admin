@@ -168,6 +168,33 @@ async function renderPrendas() {
           </div>
         </div>
 
+        <div class="form-section">
+          <div class="form-section-title">Descripción</div>
+          <div class="form-group">
+            <label>Descripción general</label>
+            <textarea id="fDescGeneral" rows="4" placeholder="Describe la prenda: corte, silueta, estilo, ocasión de uso…"></textarea>
+          </div>
+          <div class="form-section-subtitle">Ficha técnica</div>
+          <div class="form-grid form-grid-3">
+            <div class="form-group">
+              <label>Material</label>
+              <input type="text" id="fMaterial" placeholder="Ej: Algodón, Poliéster…">
+            </div>
+            <div class="form-group">
+              <label>Composición</label>
+              <input type="text" id="fComposicion" placeholder="Ej: 80% algodón, 20% poliéster">
+            </div>
+            <div class="form-group">
+              <label>Instrucciones de cuidado</label>
+              <input type="text" id="fCuidado" placeholder="Ej: Lavar a mano, no planchar">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Cómo usar y combinar</label>
+            <textarea id="fComoUsar" rows="3" placeholder="Tips de outfit, prendas con las que combina, ocasiones…"></textarea>
+          </div>
+        </div>
+
         <div class="form-actions">
           <button type="submit" class="btn btn-primary" id="submitPrendaBtn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -250,6 +277,13 @@ async function handlePrendaSubmit(e) {
   btn.textContent = 'Guardando…';
 
   try {
+    const _desc = {
+      general:     document.getElementById('fDescGeneral').value.trim()  || null,
+      material:    document.getElementById('fMaterial').value.trim()     || null,
+      composicion: document.getElementById('fComposicion').value.trim()  || null,
+      cuidado:     document.getElementById('fCuidado').value.trim()      || null,
+      como_usar:   document.getElementById('fComoUsar').value.trim()     || null,
+    };
     const prendaData = {
       numero:         document.getElementById('fId').value.trim(),
       nombre:         document.getElementById('fNombre').value.trim(),
@@ -262,7 +296,8 @@ async function handlePrendaSubmit(e) {
       precio_min:     parseFloat(document.getElementById('fPrecioMin').value)|| 0,
       precio_max:     parseFloat(document.getElementById('fPrecioMax').value)|| 0,
       disponible:     true,
-      baja:           false
+      baja:           false,
+      descripcion:    Object.values(_desc).some(Boolean) ? JSON.stringify(_desc) : null,
     };
 
     const { data: prenda, error } = await db.from('prendas').insert(prendaData).select().single();
@@ -476,8 +511,8 @@ async function abrirEditarPrenda(id) {
 
   // Try fetching with optional columns (numero, categoria); fall back if they don't exist yet
   let p, hasExtras = true;
-  const fullSel = 'id, nombre, marca, categoria, numero, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, fotos_prendas(id, url)';
-  const safeSel = 'id, nombre, marca, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, fotos_prendas(id, url)';
+  const fullSel = 'id, nombre, marca, categoria, numero, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
+  const safeSel = 'id, nombre, marca, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
 
   let { data, error } = await db.from('prendas').select(fullSel).eq('id', id).single();
   if (error && error.message.includes('does not exist')) {
@@ -495,6 +530,7 @@ async function abrirEditarPrenda(id) {
   _editFotosNuevas = [];
 
   const estadoVal = p.baja ? 'baja' : p.disponible ? 'disponible' : 'vendida';
+  const desc = parseDesc(p.descripcion);
 
   openModal(`
     <div class="modal-header">
@@ -594,6 +630,33 @@ async function abrirEditarPrenda(id) {
         </div>
       </div>
 
+      <div class="edit-section">
+        <div class="form-section-title">Descripción</div>
+        <div class="form-group">
+          <label>Descripción general</label>
+          <textarea id="eDescGeneral" rows="4" placeholder="Describe la prenda: corte, silueta, estilo, ocasión de uso…">${escHtml(desc.general)}</textarea>
+        </div>
+        <div class="form-section-subtitle">Ficha técnica</div>
+        <div class="form-grid form-grid-3">
+          <div class="form-group">
+            <label>Material</label>
+            <input type="text" id="eMaterial" value="${escHtml(desc.material)}" placeholder="Ej: Algodón, Poliéster…">
+          </div>
+          <div class="form-group">
+            <label>Composición</label>
+            <input type="text" id="eComposicion" value="${escHtml(desc.composicion)}" placeholder="Ej: 80% algodón, 20% poliéster">
+          </div>
+          <div class="form-group">
+            <label>Instrucciones de cuidado</label>
+            <input type="text" id="eCuidado" value="${escHtml(desc.cuidado)}" placeholder="Ej: Lavar a mano, no planchar">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Cómo usar y combinar</label>
+          <textarea id="eComoUsar" rows="3" placeholder="Tips de outfit, prendas con las que combina, ocasiones…">${escHtml(desc.como_usar)}</textarea>
+        </div>
+      </div>
+
       <div class="modal-footer">
         <button type="button" class="btn btn-outline" onclick="closeModal()">Cancelar</button>
         <button type="submit" class="btn btn-primary" id="editSubmitBtn">Guardar cambios</button>
@@ -659,6 +722,13 @@ async function guardarEditPrenda(id, hasExtras) {
 
   try {
     const estadoVal = document.getElementById('eEstado').value;
+    const _eDesc = {
+      general:     document.getElementById('eDescGeneral').value.trim()  || null,
+      material:    document.getElementById('eMaterial').value.trim()     || null,
+      composicion: document.getElementById('eComposicion').value.trim()  || null,
+      cuidado:     document.getElementById('eCuidado').value.trim()      || null,
+      como_usar:   document.getElementById('eComoUsar').value.trim()     || null,
+    };
     const payload = {
       nombre:         document.getElementById('eNombre').value.trim(),
       marca:          document.getElementById('eMarca').value.trim()         || null,
@@ -670,6 +740,7 @@ async function guardarEditPrenda(id, hasExtras) {
       precio_max:     parseFloat(document.getElementById('ePrecioMax').value) || 0,
       disponible:     estadoVal === 'disponible',
       baja:           estadoVal === 'baja',
+      descripcion:    Object.values(_eDesc).some(Boolean) ? JSON.stringify(_eDesc) : null,
     };
     if (hasExtras) {
       payload.numero    = document.getElementById('eId').value.trim()    || null;
@@ -1543,6 +1614,14 @@ async function rechazarDevolucion(devId) {
 // ── Helpers internos ──────────────────────────────────────────────────────────
 function escQ(str) {
   return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
+}
+
+function escHtml(str) {
+  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function parseDesc(json) {
+  try { return json ? JSON.parse(json) : {}; } catch { return {}; }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
