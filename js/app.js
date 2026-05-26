@@ -463,6 +463,12 @@ async function handlePrendaSubmit(e) {
       document.getElementById('prendaForm').appendChild(errEl);
     } else {
       showToast(`Prenda "${prenda.nombre}" guardada exitosamente.`);
+      // Notificación push a todas las vendedoras (best-effort)
+      fetch('/api/notify-new-prenda', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre: prenda.nombre }),
+      }).catch(() => {});
     }
 
   } catch (err) {
