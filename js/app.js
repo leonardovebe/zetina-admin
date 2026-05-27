@@ -313,23 +313,22 @@ function updateIAButton() {
   btn.disabled = !hasPhotos || btn.classList.contains('loading');
 }
 
-function _resizeForAI(file) {
-  return new Promise(resolve => {
+function _resizeToBlob(file) {
+  return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
       const MAX = 1024;
       const scale = Math.min(1, MAX / Math.max(img.width, img.height));
-      const w = Math.round(img.width * scale);
-      const h = Math.round(img.height * scale);
       const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      canvas.toBlob(blob => {
-        const reader = new FileReader();
-        reader.onload = () => resolve({ data: reader.result.split(',')[1], mediaType: 'image/jpeg' });
-        reader.readAsDataURL(blob);
-      }, 'image/jpeg', 0.82);
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(
+        blob => blob ? resolve(blob) : reject(new Error('No se pudo procesar la imagen')),
+        'image/jpeg', 0.82
+      );
     };
+    img.onerror = () => reject(new Error('No se pudo cargar la imagen'));
     img.src = URL.createObjectURL(file);
   });
 }
@@ -341,15 +340,26 @@ async function handleGenerarIA() {
   const originalHTML = btn.innerHTML;
   btn.innerHTML = `<span class="spinner-sm"></span> Analizando…`;
 
+  const sessionId = Date.now().toString(36);
+  const tempPaths = [];
+
   try {
+    const uploadForAI = async (file, type, idx) => {
+      const blob = await _resizeToBlob(file);
+      const path = `ia-temp/${sessionId}/${type}-${idx}.jpg`;
+      const { data, error } = await db.storage.from('prenda-fotos').upload(path, blob, { contentType: 'image/jpeg' });
+      if (error) throw error;
+      tempPaths.push(data.path);
+      const { data: u } = db.storage.from('prenda-fotos').getPublicUrl(data.path);
+      return { url: u.publicUrl, type };
+    };
+
     const images = [];
-    for (const file of selectedFotosPrenda) {
-      const img = await _resizeForAI(file);
-      images.push({ type: 'prenda', ...img });
+    for (let i = 0; i < selectedFotosPrenda.length; i++) {
+      images.push(await uploadForAI(selectedFotosPrenda[i], 'prenda', i));
     }
-    for (const file of selectedFotosEtiqueta) {
-      const img = await _resizeForAI(file);
-      images.push({ type: 'etiqueta', ...img });
+    for (let i = 0; i < selectedFotosEtiqueta.length; i++) {
+      images.push(await uploadForAI(selectedFotosEtiqueta[i], 'etiqueta', i));
     }
 
     const res = await fetch('/api/generar-descripcion', {
@@ -365,20 +375,23 @@ async function handleGenerarIA() {
 
     const r = await res.json();
 
-    if (r.nombre)             document.getElementById('fNombre').value       = r.nombre;
-    if (r.marca)              document.getElementById('fMarca').value        = r.marca;
-    if (r.color)              document.getElementById('fColor').value        = r.color;
-    if (r.talla)              document.getElementById('fTallaEtiqueta').value = r.talla;
-    if (r.material)           document.getElementById('fMaterial').value     = r.material;
-    if (r.composicion)        document.getElementById('fComposicion').value  = r.composicion;
-    if (r.cuidado)            document.getElementById('fCuidado').value      = r.cuidado;
-    if (r.descripcion_general)document.getElementById('fDescGeneral').value  = r.descripcion_general;
-    if (r.como_usar)          document.getElementById('fComoUsar').value     = r.como_usar;
+    if (r.nombre)              document.getElementById('fNombre').value        = r.nombre;
+    if (r.marca)               document.getElementById('fMarca').value         = r.marca;
+    if (r.color)               document.getElementById('fColor').value         = r.color;
+    if (r.talla)               document.getElementById('fTallaEtiqueta').value = r.talla;
+    if (r.material)            document.getElementById('fMaterial').value      = r.material;
+    if (r.composicion)         document.getElementById('fComposicion').value   = r.composicion;
+    if (r.cuidado)             document.getElementById('fCuidado').value       = r.cuidado;
+    if (r.descripcion_general) document.getElementById('fDescGeneral').value   = r.descripcion_general;
+    if (r.como_usar)           document.getElementById('fComoUsar').value      = r.como_usar;
 
     showToast('¡Campos llenados con IA! Revisa y edita antes de guardar.', 'success');
   } catch (err) {
     showToast(err.message || 'Error al conectar con la IA', 'error');
   } finally {
+    if (tempPaths.length) {
+      db.storage.from('prenda-fotos').remove(tempPaths).catch(() => {});
+    }
     btn.classList.remove('loading');
     btn.innerHTML = originalHTML;
     updateIAButton();

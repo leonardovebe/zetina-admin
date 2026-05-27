@@ -25,14 +25,14 @@ module.exports = async function handler(req, res) {
   if (etiquetas.length) {
     content.push({ type: 'text', text: 'Estas son las fotos de las ETIQUETAS de la prenda (úsalas para leer talla, composición, material e instrucciones de cuidado):' });
     for (const img of etiquetas) {
-      content.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } });
+      content.push({ type: 'image', source: { type: 'url', url: img.url } });
     }
   }
 
   if (prendas.length) {
     content.push({ type: 'text', text: `${etiquetas.length ? '\n' : ''}Estas son las fotos de la PRENDA (úsalas para describir estilo, color, corte y dar tips de combinación):` });
     for (const img of prendas) {
-      content.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } });
+      content.push({ type: 'image', source: { type: 'url', url: img.url } });
     }
   }
 
