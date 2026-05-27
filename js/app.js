@@ -63,6 +63,8 @@ function navigate(section) {
   // Close mobile sidebar
   document.getElementById('sidebar').classList.remove('open');
 
+  if (section === 'pedidos') updatePedidosBadge(0);
+
   const renders = { financiero: renderFinanciero, prendas: renderPrendas,
     inventario: renderInventario, pedidos: renderPedidos,
     vendedoras: renderVendedoras, clientes: renderClientes,
@@ -1781,10 +1783,44 @@ function parseDesc(json) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+//  BADGE PEDIDOS NUEVOS
+// ══════════════════════════════════════════════════════════════════════════════
+function updatePedidosBadge(count) {
+  const badge = document.getElementById('pedidosBadge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : String(count);
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+async function initPedidosRealtime() {
+  const { count } = await db
+    .from('pedidos')
+    .select('*', { count: 'exact', head: true })
+    .eq('estado', 'En proceso');
+  updatePedidosBadge(count || 0);
+
+  db.channel('pedidos-nuevos')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, async () => {
+      if (location.hash === '#pedidos') return;
+      const { count: n } = await db
+        .from('pedidos')
+        .select('*', { count: 'exact', head: true })
+        .eq('estado', 'En proceso');
+      updatePedidosBadge(n || 0);
+    })
+    .subscribe();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
   checkAuth();
+  initPedidosRealtime();
 
   const session = getSession();
   if (session) {
