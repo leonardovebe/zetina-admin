@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/generar-descripcion.js": {
+      "maxDuration": 30
+    }
+  },
   "headers": [
     {
       "source": "/(.*\\.js)",

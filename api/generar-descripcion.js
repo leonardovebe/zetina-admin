@@ -1,8 +1,6 @@
-export const config = {
-  api: { bodyParser: { sizeLimit: '12mb' } },
-};
+module.exports = async function handler(req, res) {
+  console.log('[generar-descripcion] request received:', req.method);
 
-export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -92,4 +90,4 @@ export default async function handler(req, res) {
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Error interno del servidor' });
   }
-}
+};
