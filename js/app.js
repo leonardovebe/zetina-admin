@@ -313,19 +313,18 @@ function updateIAButton() {
   btn.disabled = !hasPhotos || btn.classList.contains('loading');
 }
 
-function _resizeToBlob(file) {
+function _compressImage(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const MAX = 1024;
-      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      const scale = Math.min(1, 1200 / img.width);
       const canvas = document.createElement('canvas');
       canvas.width  = Math.round(img.width  * scale);
       canvas.height = Math.round(img.height * scale);
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
       canvas.toBlob(
         blob => blob ? resolve(blob) : reject(new Error('No se pudo procesar la imagen')),
-        'image/jpeg', 0.82
+        'image/jpeg', 0.85
       );
     };
     img.onerror = () => reject(new Error('No se pudo cargar la imagen'));
@@ -345,7 +344,7 @@ async function handleGenerarIA() {
 
   try {
     const uploadForAI = async (file, type, idx) => {
-      const blob = await _resizeToBlob(file);
+      const blob = await _compressImage(file);
       const path = `ia-temp/${sessionId}/${type}-${idx}.jpg`;
       const { data, error } = await db.storage.from('prenda-fotos').upload(path, blob, { contentType: 'image/jpeg' });
       if (error) throw error;
@@ -399,9 +398,9 @@ async function handleGenerarIA() {
 }
 
 async function uploadFoto(file, prendaId) {
-  const ext  = file.name.split('.').pop().toLowerCase();
-  const path = `prendas/${prendaId}/${Date.now()}.${ext}`;
-  const { data, error } = await db.storage.from('prenda-fotos').upload(path, file, { contentType: file.type });
+  const blob = await _compressImage(file);
+  const path = `prendas/${prendaId}/${Date.now()}.jpg`;
+  const { data, error } = await db.storage.from('prenda-fotos').upload(path, blob, { contentType: 'image/jpeg' });
   if (error) {
     console.error('[uploadFoto] Error completo de Supabase:', error);
     console.error('[uploadFoto] Archivo:', file.name, '| Tamaño:', file.size, 'bytes | Tipo:', file.type);
