@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "build": "echo ok"
+  },
   "engines": {
     "node": "20.x"
   }
