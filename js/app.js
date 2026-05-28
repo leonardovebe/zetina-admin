@@ -86,63 +86,61 @@ async function renderPrendas() {
     <div class="upload-form-container">
       <form id="prendaForm" class="prenda-form">
 
-        <!-- Fotos de la prenda (se suben a Supabase) -->
+        <!-- 1. ID -->
         <div class="form-section">
-          <div class="form-section-title">
-            Fotos de la prenda
-            <span class="foto-section-badge">Se publican en el catálogo</span>
-          </div>
-          <div class="photo-upload-area" id="photoAreaPrenda">
-            <input type="file" id="fotosInputPrenda" accept="image/*" multiple hidden>
-            <div class="photo-upload-placeholder" id="photoPlaceholderPrenda">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
-              </svg>
-              <p>Arrastra fotos aquí o <span>selecciona archivos</span></p>
-              <p class="text-muted">JPG, PNG, WEBP — Máx 5 MB por foto</p>
+          <div class="form-section-title">ID</div>
+          <div class="form-grid form-grid-2">
+            <div class="form-group">
+              <label>ID de la prenda *</label>
+              <input type="text" id="fId" required placeholder="Ej: SAL-001, RAC-045…">
             </div>
-            <div class="photo-previews" id="photoPreviewsPrenda"></div>
           </div>
         </div>
 
-        <!-- Fotos de etiquetas (solo para IA, no se guardan) -->
+        <!-- 2. Tallas -->
         <div class="form-section">
-          <div class="form-section-title">
-            Fotos de etiquetas
-            <span class="foto-section-badge foto-section-badge--ia">Solo para análisis de IA</span>
-          </div>
-          <div class="photo-upload-area photo-upload-area--etiqueta" id="photoAreaEtiqueta">
-            <input type="file" id="fotosInputEtiqueta" accept="image/*" multiple hidden>
-            <div class="photo-upload-placeholder" id="photoPlaceholderEtiqueta">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <rect x="3" y="6" width="18" height="13" rx="2"/>
-                <path d="M3 10h18M8 6V4M16 6V4"/>
-              </svg>
-              <p>Fotos de etiquetas con talla, composición y cuidado</p>
-              <p class="text-muted">No se guardan — solo se analizan con IA</p>
+          <div class="form-section-title">Tallas</div>
+          <div class="form-grid form-grid-2">
+            <div class="form-group">
+              <label>Talla etiqueta</label>
+              <input type="text" id="fTallaEtiqueta" placeholder="Ej: L, XL, 38">
             </div>
-            <div class="photo-previews" id="photoPreviewsEtiqueta"></div>
+            <div class="form-group">
+              <label>Talla real</label>
+              <input type="text" id="fTallaReal" placeholder="Ej: M, L">
+            </div>
           </div>
         </div>
 
-        <!-- Botón Generar con IA -->
-        <div class="ia-btn-row">
-          <button type="button" id="btnGenerarIA" class="btn-ia" disabled>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-            </svg>
-            Generar con IA
-          </button>
-          <span class="ia-hint">Analiza las fotos y rellena el formulario automáticamente</span>
+        <!-- 3. Precios -->
+        <div class="form-section">
+          <div class="form-section-title">Precios</div>
+          <div class="form-grid form-grid-3">
+            <div class="form-group">
+              <label>Precio mínimo</label>
+              <div class="input-prefix"><span>$</span>
+                <input type="number" id="fPrecioMin" min="0" step="0.01" placeholder="0.00">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Precio vendedora <span class="field-auto-hint">Auto</span></label>
+              <div class="input-prefix"><span>$</span>
+                <input type="number" id="fPrecioVendedora" min="0" step="1" placeholder="0">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Precio máximo <span class="field-auto-hint">Auto</span></label>
+              <div class="input-prefix"><span>$</span>
+                <input type="number" id="fPrecioMax" min="0" step="0.01" placeholder="0.00">
+              </div>
+            </div>
+          </div>
         </div>
 
+        <!-- 4. Nombre y Marca -->
         <div class="form-section">
           <div class="form-section-title">Información</div>
-          <div class="form-grid">
-            <div class="form-group">
-              <label>ID *</label>
-              <input type="text" id="fId" required placeholder="Ej: ZT-001">
-            </div>
+          <div class="form-grid form-grid-2">
             <div class="form-group">
               <label>Nombre *</label>
               <input type="text" id="fNombre" required placeholder="Ej: Blusa Floral Rosa">
@@ -151,6 +149,10 @@ async function renderPrendas() {
               <label>Marca</label>
               <input type="text" id="fMarca" placeholder="Ej: Shein, Zara…">
             </div>
+          </div>
+
+          <!-- 5. Color + meta -->
+          <div class="form-grid">
             <div class="form-group">
               <label>Color</label>
               <input type="text" id="fColor" placeholder="Ej: Negro, Rosa, Multicolor">
@@ -172,42 +174,54 @@ async function renderPrendas() {
           </div>
         </div>
 
+        <!-- 6. Fotos de la prenda -->
         <div class="form-section">
-          <div class="form-section-title">Tallas</div>
-          <div class="form-grid form-grid-2">
-            <div class="form-group">
-              <label>Talla etiqueta</label>
-              <input type="text" id="fTallaEtiqueta" placeholder="Ej: L, XL, 38">
+          <div class="form-section-title">
+            Fotos de la prenda
+            <span class="foto-section-badge">Se publican en el catálogo</span>
+          </div>
+          <div class="photo-upload-area" id="photoAreaPrenda">
+            <input type="file" id="fotosInputPrenda" accept="image/*" multiple hidden>
+            <div class="photo-upload-placeholder" id="photoPlaceholderPrenda">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+              </svg>
+              <p>Arrastra fotos aquí o <span>selecciona archivos</span></p>
+              <p class="text-muted">JPG, PNG, WEBP — Máx 5 MB por foto</p>
             </div>
-            <div class="form-group">
-              <label>Talla real</label>
-              <input type="text" id="fTallaReal" placeholder="Ej: M, L">
-            </div>
+            <div class="photo-previews" id="photoPreviewsPrenda"></div>
           </div>
         </div>
 
+        <!-- 7. Fotos de etiquetas -->
         <div class="form-section">
-          <div class="form-section-title">Precios</div>
-          <div class="form-grid">
-            <div class="form-group">
-              <label>Precio mínimo</label>
-              <div class="input-prefix"><span>$</span>
-                <input type="number" id="fPrecioMin" min="0" step="0.01" placeholder="0.00">
-              </div>
-            </div>
-            <div class="form-group">
-              <label>Precio vendedora <span class="field-auto-hint">Auto</span></label>
-              <div class="input-prefix"><span>$</span>
-                <input type="number" id="fPrecioVendedora" min="0" step="1" placeholder="0">
-              </div>
-            </div>
-            <div class="form-group">
-              <label>Precio máximo <span class="field-auto-hint">Auto</span></label>
-              <div class="input-prefix"><span>$</span>
-                <input type="number" id="fPrecioMax" min="0" step="0.01" placeholder="0.00">
-              </div>
-            </div>
+          <div class="form-section-title">
+            Fotos de etiquetas
+            <span class="foto-section-badge foto-section-badge--ia">Solo para análisis de IA</span>
           </div>
+          <div class="photo-upload-area photo-upload-area--etiqueta" id="photoAreaEtiqueta">
+            <input type="file" id="fotosInputEtiqueta" accept="image/*" multiple hidden>
+            <div class="photo-upload-placeholder" id="photoPlaceholderEtiqueta">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="3" y="6" width="18" height="13" rx="2"/>
+                <path d="M3 10h18M8 6V4M16 6V4"/>
+              </svg>
+              <p>Fotos de etiquetas con talla, composición y cuidado</p>
+              <p class="text-muted">No se guardan — solo se analizan con IA</p>
+            </div>
+            <div class="photo-previews" id="photoPreviewsEtiqueta"></div>
+          </div>
+        </div>
+
+        <!-- 8. Botón Generar con IA -->
+        <div class="ia-btn-row">
+          <button type="button" id="btnGenerarIA" class="btn-ia" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+            </svg>
+            Generar con IA
+          </button>
+          <span class="ia-hint">Analiza las fotos y rellena el formulario automáticamente</span>
         </div>
 
         <div class="form-section">
@@ -386,10 +400,21 @@ async function handleGenerarIA() {
       images.push(await uploadForAI(selectedFotosEtiqueta[i], 'etiqueta', i));
     }
 
+    const idVal  = document.getElementById('fId').value.trim().toUpperCase();
+    const prefix = idVal.slice(0, 3);
+    const categoriaLabels = { SAL: 'Saldo', RAC: 'Ropa alta calidad', JOY: 'Joyería/Accesorios', INT: 'Ropa interior' };
+    const contexto = {
+      categoria:     categoriaLabels[prefix] || null,
+      tallaEtiqueta: document.getElementById('fTallaEtiqueta').value.trim() || null,
+      tallaReal:     document.getElementById('fTallaReal').value.trim()     || null,
+      precioMin:     parseFloat(document.getElementById('fPrecioMin').value)  || null,
+      precioMax:     parseFloat(document.getElementById('fPrecioMax').value)  || null,
+    };
+
     const res = await fetch('/api/generar-descripcion', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ images }),
+      body: JSON.stringify({ images, contexto }),
     });
 
     if (!res.ok) {

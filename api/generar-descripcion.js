@@ -7,7 +7,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
 
-  const { images } = req.body || {};
+  const { images, contexto } = req.body || {};
   if (!Array.isArray(images) || !images.length) {
     return res.status(400).json({ error: 'Se requiere al menos una imagen' });
   }
@@ -36,6 +36,19 @@ module.exports = async function handler(req, res) {
     }
   }
 
+  if (contexto && Object.values(contexto).some(Boolean)) {
+    const lineas = [];
+    if (contexto.categoria)     lineas.push(`- Categoría: ${contexto.categoria}`);
+    if (contexto.tallaEtiqueta) lineas.push(`- Talla etiqueta: ${contexto.tallaEtiqueta}`);
+    if (contexto.tallaReal)     lineas.push(`- Talla real: ${contexto.tallaReal}`);
+    if (contexto.precioMin)     lineas.push(`- Precio mínimo de venta: $${contexto.precioMin}`);
+    if (contexto.precioMax)     lineas.push(`- Precio máximo de venta: $${contexto.precioMax}`);
+    content.push({
+      type: 'text',
+      text: `CONTEXTO DE ESTA PRENDA (ya conocido — úsalo en los argumentos de venta):\n${lineas.join('\n')}`,
+    });
+  }
+
   content.push({
     type: 'text',
     text: `Eres una mentora de ventas experta en moda femenina, ayudando a vendedoras mexicanas a justificar el precio de sus prendas con confianza.
@@ -51,14 +64,15 @@ Analiza las imágenes y devuelve ÚNICAMENTE un JSON válido sin markdown, sin e
   "cuidado": "instrucciones de cuidado de la etiqueta en texto conciso, o null",
   "por_que_vale": "2-3 oraciones que justifiquen el precio con argumentos reales: si es marca internacional como Theory, Maje, Hobbs o Marc Bouwer, menciona que en Liverpool o El Palacio de Hierro estas marcas se venden a precio completo mucho mayor; si es Vero Moda u ONLY, destaca que esta pieza es fabricación para el mercado asiático o europeo con diseños exclusivos que nunca llegan a México; si la etiqueta menciona lana, cachemira, seda u otros materiales premium, ese es el argumento central. Tono directo y seguro, como si le dijeras a una amiga por qué vale la pena.",
   "cliente_ideal": "2-3 oraciones describiendo a quién le queda perfecto: tipo de cuerpo favorecido por el corte, estilo de vida, ocasiones que frecuenta. Habla de ella de forma concreta: 'Es perfecta para la chava que...' o 'Tu clienta que trabaja en oficina y...'",
-  "como_presentarla": "guión corto de 2-4 oraciones para presentar la prenda y cerrar la venta: qué destacar primero, cómo resaltar lo que más llama la atención, y cómo invitar a probársela o apartarla. Tono natural, como plática de amigas.",
-  "manejo_objecion": "respuesta lista para cuando la clienta diga 'está muy caro'. 2-3 oraciones que reencuadren el valor sin rebajar el precio ni ponerse a la defensiva: compara con el precio en tienda departamental si aplica, o argumenta el costo por uso si es una prenda versátil y duradera."
+  "como_presentarla": "guión corto de 2-4 oraciones para presentar la prenda y cerrar la venta: qué destacar primero, cómo resaltar lo que más llama la atención, y cómo invitar a probársela o apartarla. Si el CONTEXTO incluye tallas, menciona para qué tipo de cuerpo o talla real queda bien. Tono natural, como plática de amigas.",
+  "manejo_objecion": "respuesta lista para cuando la clienta diga 'está muy caro'. 2-3 oraciones que reencuadren el valor sin rebajar el precio ni ponerse a la defensiva: si el CONTEXTO incluye precio máximo, úsalo como referencia ('por solo $X llevas...'); compara con el precio en tienda departamental si aplica, o argumenta el costo por uso si es una prenda versátil y duradera."
 }
 
 REGLAS IMPORTANTES:
 - Nunca menciones que la prenda es de segunda mano, usada o que tuvo dueño anterior
 - Usa español mexicano natural, no neutro ni formal
-- Cada campo debe ser accionable — la vendedora lo debe poder leer y usarlo de inmediato`,
+- Cada campo debe ser accionable — la vendedora lo debe poder leer y usarlo de inmediato
+- Si recibiste CONTEXTO al inicio, úsalo activamente en por_que_vale, como_presentarla y manejo_objecion`,
   });
 
   try {
