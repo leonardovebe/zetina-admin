@@ -188,7 +188,7 @@ async function renderPrendas() {
 
         <div class="form-section">
           <div class="form-section-title">Precios</div>
-          <div class="form-grid form-grid-3">
+          <div class="form-grid">
             <div class="form-group">
               <label>Costo *</label>
               <div class="input-prefix"><span>$</span>
@@ -202,7 +202,13 @@ async function renderPrendas() {
               </div>
             </div>
             <div class="form-group">
-              <label>Precio máximo</label>
+              <label>Precio vendedora <span class="field-auto-hint">Auto</span></label>
+              <div class="input-prefix"><span>$</span>
+                <input type="number" id="fPrecioVendedora" min="0" step="1" placeholder="0">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Precio máximo <span class="field-auto-hint">Auto</span></label>
               <div class="input-prefix"><span>$</span>
                 <input type="number" id="fPrecioMax" min="0" step="0.01" placeholder="0.00">
               </div>
@@ -263,6 +269,20 @@ async function renderPrendas() {
   bindPhotoSection('photoAreaEtiqueta', 'fotosInputEtiqueta', 'photoPreviewsEtiqueta', selectedFotosEtiqueta, renderEtiquetaPreviews);
   document.getElementById('btnGenerarIA').addEventListener('click', handleGenerarIA);
   document.getElementById('prendaForm').addEventListener('submit', handlePrendaSubmit);
+  document.getElementById('fPrecioMin').addEventListener('input', calcularPreciosAuto);
+  document.getElementById('fId').addEventListener('input', calcularPreciosAuto);
+}
+
+function calcularPreciosAuto() {
+  const idVal    = (document.getElementById('fId').value.trim()).toUpperCase();
+  const precioMin = parseFloat(document.getElementById('fPrecioMin').value) || 0;
+  if (precioMin <= 0) return;
+
+  document.getElementById('fPrecioVendedora').value = Math.ceil(precioMin * 0.70 / 10) * 10;
+
+  const prefix = idVal.slice(0, 3);
+  const mult = { SAL: 1.10, RAC: 1.25, JOY: 1.40, INT: 1.40 }[prefix];
+  if (mult) document.getElementById('fPrecioMax').value = (precioMin * mult).toFixed(2);
 }
 
 function bindPhotoSection(areaId, inputId, previewsId, store, renderFn) {
@@ -449,9 +469,10 @@ async function handlePrendaSubmit(e) {
       vendedora_id:   document.getElementById('fVendedora').value           || null,
       talla_etiqueta: document.getElementById('fTallaEtiqueta').value.trim()|| null,
       talla_real:     document.getElementById('fTallaReal').value.trim()    || null,
-      precio_costo:   parseFloat(document.getElementById('fCosto').value)   || 0,
-      precio_min:     parseFloat(document.getElementById('fPrecioMin').value)|| 0,
-      precio_max:     parseFloat(document.getElementById('fPrecioMax').value)|| 0,
+      precio_costo:      parseFloat(document.getElementById('fCosto').value)          || 0,
+      precio_min:        parseFloat(document.getElementById('fPrecioMin').value)       || 0,
+      precio_vendedora:  parseFloat(document.getElementById('fPrecioVendedora').value) || null,
+      precio_max:        parseFloat(document.getElementById('fPrecioMax').value)       || 0,
       disponible:     true,
       baja:           false,
       descripcion:    Object.values(_desc).some(Boolean) ? JSON.stringify(_desc) : null,
