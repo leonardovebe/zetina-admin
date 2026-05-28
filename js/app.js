@@ -469,10 +469,9 @@ async function handlePrendaSubmit(e) {
       vendedora_id:   document.getElementById('fVendedora').value           || null,
       talla_etiqueta: document.getElementById('fTallaEtiqueta').value.trim()|| null,
       talla_real:     document.getElementById('fTallaReal').value.trim()    || null,
-      precio_costo:      parseFloat(document.getElementById('fCosto').value)          || 0,
-      precio_min:        parseFloat(document.getElementById('fPrecioMin').value)       || 0,
-      precio_vendedora:  parseFloat(document.getElementById('fPrecioVendedora').value) || null,
-      precio_max:        parseFloat(document.getElementById('fPrecioMax').value)       || 0,
+      precio_costo:   parseFloat(document.getElementById('fPrecioVendedora').value) || 0,
+      precio_min:     parseFloat(document.getElementById('fPrecioMin').value)       || 0,
+      precio_max:     parseFloat(document.getElementById('fPrecioMax').value)       || 0,
       disponible:     true,
       baja:           false,
       descripcion:    Object.values(_desc).some(Boolean) ? JSON.stringify(_desc) : null,
@@ -789,9 +788,9 @@ async function abrirEditarPrenda(id) {
         <div class="form-section-title">Precios</div>
         <div class="form-grid form-grid-3">
           <div class="form-group">
-            <label>Costo *</label>
+            <label>Precio vendedora</label>
             <div class="input-prefix"><span>$</span>
-              <input type="number" id="eCosto" required min="0" step="0.01" value="${p.precio_costo || ''}">
+              <input type="number" id="eCosto" min="0" step="1" value="${p.precio_costo || ''}">
             </div>
           </div>
           <div class="form-group">

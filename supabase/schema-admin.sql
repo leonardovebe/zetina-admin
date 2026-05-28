@@ -24,7 +24,6 @@ alter table prendas add column if not exists categoria        text;
 alter table prendas add column if not exists baja             boolean not null default false;
 alter table prendas add column if not exists descripcion      text;
 alter table prendas add column if not exists color            text;
-alter table prendas add column if not exists precio_vendedora numeric(10,2);
 
 -- ── Nivel en vendedoras ──────────────────────────────────────────────────────
 alter table vendedoras add column if not exists nivel text not null default 'Básico';
