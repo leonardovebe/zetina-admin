@@ -190,12 +190,6 @@ async function renderPrendas() {
           <div class="form-section-title">Precios</div>
           <div class="form-grid">
             <div class="form-group">
-              <label>Costo *</label>
-              <div class="input-prefix"><span>$</span>
-                <input type="number" id="fCosto" required min="0" step="0.01" placeholder="0.00">
-              </div>
-            </div>
-            <div class="form-group">
               <label>Precio mínimo</label>
               <div class="input-prefix"><span>$</span>
                 <input type="number" id="fPrecioMin" min="0" step="0.01" placeholder="0.00">
