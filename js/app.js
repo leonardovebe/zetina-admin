@@ -212,10 +212,6 @@ async function renderPrendas() {
 
         <div class="form-section">
           <div class="form-section-title">Descripción</div>
-          <div class="form-group">
-            <label>Descripción general</label>
-            <textarea id="fDescGeneral" rows="4" placeholder="Describe la prenda: corte, silueta, estilo, ocasión de uso…"></textarea>
-          </div>
           <div class="form-section-subtitle">Ficha técnica</div>
           <div class="form-grid form-grid-3">
             <div class="form-group">
@@ -231,9 +227,22 @@ async function renderPrendas() {
               <input type="text" id="fCuidado" placeholder="Ej: Lavar a mano, no planchar">
             </div>
           </div>
+          <div class="form-section-subtitle">Cómo vender</div>
           <div class="form-group">
-            <label>Cómo usar y combinar</label>
-            <textarea id="fComoUsar" rows="3" placeholder="Tips de outfit, prendas con las que combina, ocasiones…"></textarea>
+            <label>Por qué vale lo que cuesta</label>
+            <textarea id="fPorQueVale" rows="3" placeholder="Argumentos de valor: calidad, exclusividad, durabilidad…"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Cliente ideal</label>
+            <textarea id="fClienteIdeal" rows="2" placeholder="A quién le queda perfecto esta prenda…"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Cómo presentarla</label>
+            <textarea id="fComoPresentarla" rows="3" placeholder="Tips para mostrarla, con qué combinarla, cómo usarla…"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Si dice que está muy caro…</label>
+            <textarea id="fManejoObjecion" rows="3" placeholder="Respuestas para manejar objeciones de precio…"></textarea>
           </div>
         </div>
 
@@ -383,8 +392,10 @@ async function handleGenerarIA() {
     if (r.material)            document.getElementById('fMaterial').value      = r.material;
     if (r.composicion)         document.getElementById('fComposicion').value   = r.composicion;
     if (r.cuidado)             document.getElementById('fCuidado').value       = r.cuidado;
-    if (r.descripcion_general) document.getElementById('fDescGeneral').value   = r.descripcion_general;
-    if (r.como_usar)           document.getElementById('fComoUsar').value      = r.como_usar;
+    if (r.por_que_vale)       document.getElementById('fPorQueVale').value      = r.por_que_vale;
+    if (r.cliente_ideal)      document.getElementById('fClienteIdeal').value   = r.cliente_ideal;
+    if (r.como_presentarla)   document.getElementById('fComoPresentarla').value = r.como_presentarla;
+    if (r.manejo_objecion)    document.getElementById('fManejoObjecion').value  = r.manejo_objecion;
 
     showToast('¡Campos llenados con IA! Revisa y edita antes de guardar.', 'success');
   } catch (err) {
@@ -421,11 +432,13 @@ async function handlePrendaSubmit(e) {
 
   try {
     const _desc = {
-      general:     document.getElementById('fDescGeneral').value.trim()  || null,
-      material:    document.getElementById('fMaterial').value.trim()     || null,
-      composicion: document.getElementById('fComposicion').value.trim()  || null,
-      cuidado:     document.getElementById('fCuidado').value.trim()      || null,
-      como_usar:   document.getElementById('fComoUsar').value.trim()     || null,
+      material:         document.getElementById('fMaterial').value.trim()        || null,
+      composicion:      document.getElementById('fComposicion').value.trim()     || null,
+      cuidado:          document.getElementById('fCuidado').value.trim()         || null,
+      por_que_vale:     document.getElementById('fPorQueVale').value.trim()      || null,
+      cliente_ideal:    document.getElementById('fClienteIdeal').value.trim()    || null,
+      como_presentarla: document.getElementById('fComoPresentarla').value.trim() || null,
+      manejo_objecion:  document.getElementById('fManejoObjecion').value.trim()  || null,
     };
     const prendaData = {
       numero:         document.getElementById('fId').value.trim(),
@@ -789,10 +802,6 @@ async function abrirEditarPrenda(id) {
 
       <div class="edit-section">
         <div class="form-section-title">Descripción</div>
-        <div class="form-group">
-          <label>Descripción general</label>
-          <textarea id="eDescGeneral" rows="4" placeholder="Describe la prenda: corte, silueta, estilo, ocasión de uso…">${escHtml(desc.general)}</textarea>
-        </div>
         <div class="form-section-subtitle">Ficha técnica</div>
         <div class="form-grid form-grid-3">
           <div class="form-group">
@@ -808,9 +817,22 @@ async function abrirEditarPrenda(id) {
             <input type="text" id="eCuidado" value="${escHtml(desc.cuidado)}" placeholder="Ej: Lavar a mano, no planchar">
           </div>
         </div>
+        <div class="form-section-subtitle">Cómo vender</div>
         <div class="form-group">
-          <label>Cómo usar y combinar</label>
-          <textarea id="eComoUsar" rows="3" placeholder="Tips de outfit, prendas con las que combina, ocasiones…">${escHtml(desc.como_usar)}</textarea>
+          <label>Por qué vale lo que cuesta</label>
+          <textarea id="ePorQueVale" rows="3" placeholder="Argumentos de valor: calidad, exclusividad, durabilidad…">${escHtml(desc.por_que_vale)}</textarea>
+        </div>
+        <div class="form-group">
+          <label>Cliente ideal</label>
+          <textarea id="eClienteIdeal" rows="2" placeholder="A quién le queda perfecto esta prenda…">${escHtml(desc.cliente_ideal)}</textarea>
+        </div>
+        <div class="form-group">
+          <label>Cómo presentarla</label>
+          <textarea id="eComoPresentarla" rows="3" placeholder="Tips para mostrarla, con qué combinarla, cómo usarla…">${escHtml(desc.como_presentarla)}</textarea>
+        </div>
+        <div class="form-group">
+          <label>Si dice que está muy caro…</label>
+          <textarea id="eManejoObjecion" rows="3" placeholder="Respuestas para manejar objeciones de precio…">${escHtml(desc.manejo_objecion)}</textarea>
         </div>
       </div>
 
@@ -880,11 +902,13 @@ async function guardarEditPrenda(id, hasExtras) {
   try {
     const estadoVal = document.getElementById('eEstado').value;
     const _eDesc = {
-      general:     document.getElementById('eDescGeneral').value.trim()  || null,
-      material:    document.getElementById('eMaterial').value.trim()     || null,
-      composicion: document.getElementById('eComposicion').value.trim()  || null,
-      cuidado:     document.getElementById('eCuidado').value.trim()      || null,
-      como_usar:   document.getElementById('eComoUsar').value.trim()     || null,
+      material:         document.getElementById('eMaterial').value.trim()         || null,
+      composicion:      document.getElementById('eComposicion').value.trim()      || null,
+      cuidado:          document.getElementById('eCuidado').value.trim()          || null,
+      por_que_vale:     document.getElementById('ePorQueVale').value.trim()       || null,
+      cliente_ideal:    document.getElementById('eClienteIdeal').value.trim()     || null,
+      como_presentarla: document.getElementById('eComoPresentarla').value.trim()  || null,
+      manejo_objecion:  document.getElementById('eManejoObjecion').value.trim()   || null,
     };
     const payload = {
       nombre:         document.getElementById('eNombre').value.trim(),
