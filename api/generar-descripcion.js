@@ -38,7 +38,9 @@ module.exports = async function handler(req, res) {
 
   content.push({
     type: 'text',
-    text: `Eres experta en moda femenina latinoamericana. Analiza las imágenes y devuelve ÚNICAMENTE un JSON válido sin markdown, sin explicaciones, sin texto adicional antes o después. El JSON debe tener exactamente estos campos:
+    text: `Eres una mentora de ventas experta en moda femenina, ayudando a vendedoras mexicanas a justificar el precio de sus prendas con confianza.
+
+Analiza las imágenes y devuelve ÚNICAMENTE un JSON válido sin markdown, sin explicaciones, sin texto adicional antes o después. El JSON debe tener exactamente estos campos:
 {
   "nombre": "nombre comercial y atractivo de la prenda en español, máx 60 caracteres",
   "marca": "marca si es legible en alguna imagen, o null si no se ve",
@@ -47,9 +49,16 @@ module.exports = async function handler(req, res) {
   "material": "material o materiales principales (ej: Algodón, Poliéster, Viscosa) o null",
   "composicion": "composición completa tal como aparece en la etiqueta (ej: 95% algodón, 5% elastano) o null",
   "cuidado": "instrucciones de cuidado de la etiqueta en texto conciso, o null",
-  "descripcion_general": "descripción comercial y atractiva de 2-3 oraciones que resalte el estilo, silueta, corte y para qué ocasiones se recomienda",
-  "como_usar": "3-4 ideas concretas de cómo usar y combinar la prenda, separadas por punto y coma"
-}`,
+  "por_que_vale": "2-3 oraciones que justifiquen el precio con argumentos reales: si es marca internacional como Theory, Maje, Hobbs o Marc Bouwer, menciona que en Liverpool o El Palacio de Hierro estas marcas se venden a precio completo mucho mayor; si es Vero Moda u ONLY, destaca que esta pieza es fabricación para el mercado asiático o europeo con diseños exclusivos que nunca llegan a México; si la etiqueta menciona lana, cachemira, seda u otros materiales premium, ese es el argumento central. Tono directo y seguro, como si le dijeras a una amiga por qué vale la pena.",
+  "cliente_ideal": "2-3 oraciones describiendo a quién le queda perfecto: tipo de cuerpo favorecido por el corte, estilo de vida, ocasiones que frecuenta. Habla de ella de forma concreta: 'Es perfecta para la chava que...' o 'Tu clienta que trabaja en oficina y...'",
+  "como_presentarla": "guión corto de 2-4 oraciones para presentar la prenda y cerrar la venta: qué destacar primero, cómo resaltar lo que más llama la atención, y cómo invitar a probársela o apartarla. Tono natural, como plática de amigas.",
+  "manejo_objecion": "respuesta lista para cuando la clienta diga 'está muy caro'. 2-3 oraciones que reencuadren el valor sin rebajar el precio ni ponerse a la defensiva: compara con el precio en tienda departamental si aplica, o argumenta el costo por uso si es una prenda versátil y duradera."
+}
+
+REGLAS IMPORTANTES:
+- Nunca menciones que la prenda es de segunda mano, usada o que tuvo dueño anterior
+- Usa español mexicano natural, no neutro ni formal
+- Cada campo debe ser accionable — la vendedora lo debe poder leer y usarlo de inmediato`,
   });
 
   try {
@@ -61,8 +70,8 @@ module.exports = async function handler(req, res) {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 1024,
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2048,
         messages: [{ role: 'user', content }],
       }),
     });
