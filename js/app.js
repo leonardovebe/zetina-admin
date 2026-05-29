@@ -254,10 +254,6 @@ async function renderPrendas() {
             <label>Cómo presentarla</label>
             <textarea id="fComoPresentarla" rows="3" placeholder="Tips para mostrarla, con qué combinarla, cómo usarla…"></textarea>
           </div>
-          <div class="form-group">
-            <label>Si dice que está muy caro…</label>
-            <textarea id="fManejoObjecion" rows="3" placeholder="Respuestas para manejar objeciones de precio…"></textarea>
-          </div>
         </div>
 
         <div class="form-actions">
@@ -434,7 +430,6 @@ async function handleGenerarIA() {
     if (r.por_que_vale)       document.getElementById('fPorQueVale').value      = r.por_que_vale;
     if (r.cliente_ideal)      document.getElementById('fClienteIdeal').value   = r.cliente_ideal;
     if (r.como_presentarla)   document.getElementById('fComoPresentarla').value = r.como_presentarla;
-    if (r.manejo_objecion)    document.getElementById('fManejoObjecion').value  = r.manejo_objecion;
 
     showToast('¡Campos llenados con IA! Revisa y edita antes de guardar.', 'success');
   } catch (err) {
@@ -477,7 +472,6 @@ async function handlePrendaSubmit(e) {
       por_que_vale:     document.getElementById('fPorQueVale').value.trim()      || null,
       cliente_ideal:    document.getElementById('fClienteIdeal').value.trim()    || null,
       como_presentarla: document.getElementById('fComoPresentarla').value.trim() || null,
-      manejo_objecion:  document.getElementById('fManejoObjecion').value.trim()  || null,
     };
     const prendaData = {
       numero:         document.getElementById('fId').value.trim(),
@@ -869,10 +863,6 @@ async function abrirEditarPrenda(id) {
           <label>Cómo presentarla</label>
           <textarea id="eComoPresentarla" rows="3" placeholder="Tips para mostrarla, con qué combinarla, cómo usarla…">${escHtml(desc.como_presentarla)}</textarea>
         </div>
-        <div class="form-group">
-          <label>Si dice que está muy caro…</label>
-          <textarea id="eManejoObjecion" rows="3" placeholder="Respuestas para manejar objeciones de precio…">${escHtml(desc.manejo_objecion)}</textarea>
-        </div>
       </div>
 
       <div class="modal-footer">
@@ -947,7 +937,6 @@ async function guardarEditPrenda(id, hasExtras) {
       por_que_vale:     document.getElementById('ePorQueVale').value.trim()       || null,
       cliente_ideal:    document.getElementById('eClienteIdeal').value.trim()     || null,
       como_presentarla: document.getElementById('eComoPresentarla').value.trim()  || null,
-      manejo_objecion:  document.getElementById('eManejoObjecion').value.trim()   || null,
     };
     const payload = {
       nombre:         document.getElementById('eNombre').value.trim(),
