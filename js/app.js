@@ -53,7 +53,7 @@ const SECTION_TITLES = {
   prendas:      'Subir Prendas',
   inventario:   'Inventario',
   pedidos:      'Pedidos',
-  vendedoras:   'Vendedoras',
+  vendedoras:   'Visionarias',
   clientes:     'Clientas',
   devoluciones: 'Devoluciones',
   gastos:       'Gastos',
@@ -136,7 +136,7 @@ async function renderPrendas() {
               </div>
             </div>
             <div class="form-group">
-              <label>Precio vendedora <span class="field-auto-hint">Auto</span></label>
+              <label>Precio visionaria <span class="field-auto-hint">Auto</span></label>
               <div class="input-prefix"><span>$</span>
                 <input type="number" id="fPrecioVendedora" min="0" step="1" placeholder="0">
               </div>
@@ -191,7 +191,7 @@ async function renderPrendas() {
               </div>
             </div>
             <div class="form-group">
-              <label>Asignar a vendedora</label>
+              <label>Asignar a visionaria</label>
               <select id="fVendedora">
                 <option value="">Catálogo general</option>
                 ${(vendedoras || []).map(v => `<option value="${v.id}">${v.nombre}</option>`).join('')}
@@ -675,8 +675,19 @@ async function loadInventario() {
   listEl.innerHTML = '<div class="table-loading">Cargando…</div>';
 
   try {
+    const { data: dpDates } = await db
+      .from('detalle_pedidos')
+      .select('prenda_id, pedidos(fecha, estado)');
+    const ventaFechaMap = {};
+    (dpDates || []).forEach(d => {
+      if (!d.prenda_id || !d.pedidos?.fecha) return;
+      if (d.pedidos.estado !== 'Pagado' && d.pedidos.estado !== 'Entregado') return;
+      const f = d.pedidos.fecha;
+      if (!ventaFechaMap[d.prenda_id] || f > ventaFechaMap[d.prenda_id]) ventaFechaMap[d.prenda_id] = f;
+    });
+
     let q = db.from('prendas')
-      .select('id, nombre, marca, categoria, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, emoji, vendedoras(nombre), fotos_prendas(url)')
+      .select('id, nombre, marca, categoria, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, emoji, fecha_adquisicion, vendedoras(nombre), fotos_prendas(url)')
       .order('created_at', { ascending: false });
 
     if (_invFilter === 'disponible') q = q.eq('disponible', true).eq('baja', false);
@@ -714,7 +725,7 @@ async function loadInventario() {
           <thead><tr>
             <th>Foto</th><th>ID</th><th>Nombre</th><th>Marca</th>
             <th>Categoría</th><th>Talla</th><th>Costo</th>
-            <th>Min / Max</th><th>Vendedora</th><th>Estado</th><th>Acciones</th>
+            <th>Min / Max</th><th>Visionaria</th><th>Estado</th><th>Adquirida</th><th>Vendida</th><th>Acciones</th>
           </tr></thead>
           <tbody>
             ${prendas.map(p => {
@@ -732,6 +743,8 @@ async function loadInventario() {
                 <td class="td-precios">${formatPeso(p.precio_min)} – ${formatPeso(p.precio_max)}</td>
                 <td>${p.vendedoras?.nombre || '<span class="text-muted">Catálogo</span>'}</td>
                 <td>${estadoBadge(p)}</td>
+                <td style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap">${p.fecha_adquisicion ? formatDate(p.fecha_adquisicion) : '—'}</td>
+                <td style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap">${ventaFechaMap[p.id] ? formatDate(ventaFechaMap[p.id]) : '—'}</td>
                 <td class="td-actions">
                   <button class="btn-sm btn-outline" onclick="abrirEditarPrenda('${p.id}')">Editar</button>
                   ${!p.baja
@@ -875,7 +888,7 @@ async function abrirEditarPrenda(id) {
             </select>
           </div>
           <div class="form-group">
-            <label>Vendedora</label>
+            <label>Visionaria</label>
             <select id="eVendedora">
               <option value="">Catálogo general</option>
               ${(vendedoras || []).map(v => `<option value="${v.id}" ${p.vendedora_id === v.id ? 'selected' : ''}>${v.nombre}</option>`).join('')}
@@ -902,7 +915,7 @@ async function abrirEditarPrenda(id) {
         <div class="form-section-title">Precios</div>
         <div class="form-grid form-grid-3">
           <div class="form-group">
-            <label>Precio vendedora</label>
+            <label>Precio visionaria</label>
             <div class="input-prefix"><span>$</span>
               <input type="number" id="eCosto" min="0" step="1" value="${p.precio_costo || ''}">
             </div>
@@ -1170,7 +1183,7 @@ async function loadPedidos() {
       <div class="table-wrap">
         <table class="data-table">
           <thead><tr>
-            <th>Número</th><th>Vendedora</th><th>Fecha</th>
+            <th>Número</th><th>Visionaria</th><th>Fecha</th>
             <th>Artículos</th><th>Total</th><th>Estado</th><th>Acciones</th>
           </tr></thead>
           <tbody>
@@ -1277,7 +1290,7 @@ async function updateEstadoPedido(id, estado) {
 
     if (errInv) { showToast(`Error registrando inventario: ${errInv.message}`, 'error'); return; }
 
-    showToast(`Entregado — ${prendaIds.length} prenda${prendaIds.length > 1 ? 's' : ''} agregada${prendaIds.length > 1 ? 's' : ''} al inventario de la vendedora`);
+    showToast(`Entregado — ${prendaIds.length} prenda${prendaIds.length > 1 ? 's' : ''} agregada${prendaIds.length > 1 ? 's' : ''} al inventario de la visionaria`);
     return;
   }
 
@@ -1337,74 +1350,225 @@ async function verDetallePedido(pedidoId) {
 // ══════════════════════════════════════════════════════════════════════════════
 async function renderVendedoras() {
   const main = document.getElementById('sectionContent');
-  main.innerHTML = `
-    <div class="section-toolbar">
-      <div></div>
-      <button class="btn btn-primary" onclick="abrirFormVendedora()">+ Nueva vendedora</button>
-    </div>
-    <div id="vendStats" class="stats-row"></div>
-    <div id="vendList"></div>`;
-  await loadVendedoras();
-}
-
-async function loadVendedoras() {
-  const listEl = document.getElementById('vendList');
-  listEl.innerHTML = '<div class="table-loading">Cargando…</div>';
+  main.innerHTML = '<div class="table-loading">Cargando visionarias…</div>';
 
   try {
-    const { data: vendedoras, error } = await db.from('vendedoras').select('*').order('created_at', { ascending: false });
-    if (error) throw error;
+    const now = new Date();
+    const primerDiaMes = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
 
-    const statsEl = document.getElementById('vendStats');
-    if (statsEl) {
-      statsEl.innerHTML = `
-        <div class="stat-chip accent"><span class="stat-num">${vendedoras.length}</span><span class="stat-label">Vendedoras</span></div>`;
-    }
+    const [vendsR, statsR, ventasMesR, invR, clientasR] = await Promise.all([
+      db.from('vendedoras').select('id, nombre, nivel, telefono, foto_url').order('nombre'),
+      db.from('visionaria_stats').select('vendedora_id, puntos, nivel_actual, logros, matches_totales'),
+      db.from('ventas').select('monto, vendedora_id').gte('fecha', primerDiaMes),
+      db.from('inventario_vendedoras').select('vendedora_id, estado'),
+      db.from('clientes').select('id, vendedora_id'),
+    ]);
 
-    if (!vendedoras.length) {
-      listEl.innerHTML = `<div class="empty-state">No hay vendedoras registradas.<br><br>
-        <button class="btn btn-primary" onclick="abrirFormVendedora()">+ Agregar primera vendedora</button></div>`;
-      return;
-    }
+    const vends     = vendsR.data     || [];
+    const stats     = (statsR.data    || []);
+    const ventasMes = ventasMesR.data || [];
+    const inv       = invR.data       || [];
+    const clientas  = clientasR.data  || [];
+
+    const statsMap   = Object.fromEntries(stats.map(s => [s.vendedora_id, s]));
+    const ventasMap  = {};
+    ventasMes.forEach(v => { ventasMap[v.vendedora_id] = (ventasMap[v.vendedora_id] || 0) + (+v.monto || 0); });
+    const invMap = {};
+    inv.forEach(i => {
+      if (!invMap[i.vendedora_id]) invMap[i.vendedora_id] = { activas: 0, prestadas: 0 };
+      if (i.estado === 'prestado' || i.estado === 'prestada') invMap[i.vendedora_id].prestadas++;
+      else invMap[i.vendedora_id].activas++;
+    });
+    const clientasMap = {};
+    clientas.forEach(c => { clientasMap[c.vendedora_id] = (clientasMap[c.vendedora_id] || 0) + 1; });
 
     const nivelBadge = { 'Básico': 'muted', 'Silver': '', 'Gold': 'warning', 'Platinum': 'accent' };
 
-    listEl.innerHTML = `
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead><tr>
-            <th>Vendedora</th><th>Nivel</th><th>Teléfono</th>
-            <th>Email</th><th>Crédito</th><th>Acceso</th><th>Registro</th><th>Acciones</th>
-          </tr></thead>
-          <tbody>
-            ${vendedoras.map(v => `<tr>
-              <td>
-                <div class="vendedora-cell">
-                  ${v.foto_url
-                    ? `<img src="${v.foto_url}" class="avatar" alt="">`
-                    : `<div class="avatar-placeholder">${v.nombre.charAt(0).toUpperCase()}</div>`}
-                  <span class="td-name">${v.nombre}</span>
-                </div>
-              </td>
-              <td><span class="badge badge-${nivelBadge[v.nivel] || ''}">${v.nivel || 'Básico'}</span></td>
-              <td>${v.telefono || '—'}</td>
-              <td>${v.email || '—'}</td>
-              <td>${formatPeso(v.credito)}</td>
-              <td>${v.password_temporal
-                ? '<span class="badge badge-warning" title="Tiene contraseña temporal activa">🔑 Temporal</span>'
-                : '<span class="text-muted">—</span>'}</td>
-              <td>${formatDate(v.created_at)}</td>
-              <td class="td-actions">
-                <button class="btn-sm btn-outline" onclick="abrirFormVendedora('${v.id}')">Editar</button>
-                <button class="btn-sm btn-danger" onclick="deleteVendedora('${v.id}','${escQ(v.nombre)}')">Eliminar</button>
-              </td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
+    main.innerHTML = `
+      <div class="section-toolbar">
+        <div class="stats-row" style="margin:0">
+          <div class="stat-chip accent"><span class="stat-num">${vends.length}</span><span class="stat-label">Visionarias</span></div>
+        </div>
+        <button class="btn btn-primary" onclick="abrirFormVendedora()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:15px;height:15px;flex-shrink:0"><path d="M12 5v14M5 12h14"/></svg>
+          Nueva visionaria
+        </button>
+      </div>
+
+      ${!vends.length
+        ? `<div class="empty-state">No hay visionarias registradas.<br><br>
+             <button class="btn btn-primary" onclick="abrirFormVendedora()">+ Agregar primera visionaria</button></div>`
+        : `<div class="table-wrap">
+            <table class="data-table">
+              <thead><tr>
+                <th>Visionaria</th><th>Nivel</th><th>Puntos</th>
+                <th>Ganancia del mes</th><th>Inv. activo</th><th>Prestadas</th>
+                <th>Clientas</th><th>Acciones</th>
+              </tr></thead>
+              <tbody>
+                ${vends.map(v => {
+                  const st   = statsMap[v.id] || {};
+                  const gan  = ventasMap[v.id] || 0;
+                  const invD = invMap[v.id]    || { activas: 0, prestadas: 0 };
+                  const nCli = clientasMap[v.id] || 0;
+                  return `<tr>
+                    <td>
+                      <div class="vendedora-cell">
+                        ${v.foto_url
+                          ? `<img src="${v.foto_url}" class="avatar" alt="">`
+                          : `<div class="avatar-placeholder">${v.nombre.charAt(0).toUpperCase()}</div>`}
+                        <button class="vis-nombre-btn" onclick="renderDetalleVisionaria('${v.id}')">${v.nombre}</button>
+                      </div>
+                    </td>
+                    <td><span class="badge badge-${nivelBadge[v.nivel] || ''}">${v.nivel || 'Básico'}</span></td>
+                    <td>${st.puntos != null ? `<span class="vis-puntos">${st.puntos} pts</span>` : '—'}</td>
+                    <td style="font-weight:600;color:var(--success)">${gan > 0 ? formatPeso(gan) : '—'}</td>
+                    <td>${invD.activas > 0 ? `<span class="vis-inv-badge">${invD.activas}</span>` : '—'}</td>
+                    <td>${invD.prestadas > 0 ? `<span class="vis-prest-badge">${invD.prestadas}</span>` : '—'}</td>
+                    <td>${nCli > 0 ? nCli : '—'}</td>
+                    <td class="td-actions">
+                      <button class="btn-sm btn-outline" onclick="renderDetalleVisionaria('${v.id}')">Ver perfil</button>
+                      <button class="btn-sm btn-outline" onclick="abrirFormVendedora('${v.id}')">Editar</button>
+                      <button class="btn-sm btn-danger" onclick="deleteVendedora('${v.id}','${escQ(v.nombre)}')">Eliminar</button>
+                    </td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>`}`;
+
+  } catch (err) {
+    main.innerHTML = `<div class="error-state">Error: ${err.message}</div>`;
+  }
+}
+
+async function renderDetalleVisionaria(vendedoraId) {
+  const main = document.getElementById('sectionContent');
+  main.innerHTML = '<div class="table-loading">Cargando perfil…</div>';
+
+  try {
+    const now = new Date();
+    const primerDiaMes = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+
+    const [vendR, statsR, ventasMesR, invR, clientasR] = await Promise.all([
+      db.from('vendedoras').select('id, nombre, nivel, telefono, email, credito, foto_url, created_at').eq('id', vendedoraId).single(),
+      db.from('visionaria_stats').select('*').eq('vendedora_id', vendedoraId).maybeSingle(),
+      db.from('ventas').select('monto, fecha, created_at').eq('vendedora_id', vendedoraId).gte('fecha', primerDiaMes).order('fecha', { ascending: false }),
+      db.from('inventario_vendedoras').select('estado, prendas(id, nombre, numero, precio_costo, fotos_prendas(url))').eq('vendedora_id', vendedoraId),
+      db.from('clientes').select('id, nombre, telefono').eq('vendedora_id', vendedoraId).order('nombre'),
+    ]);
+
+    const vend      = vendR.data      || {};
+    const stats     = statsR.data     || {};
+    const ventasMes = ventasMesR.data || [];
+    const invItems  = invR.data       || [];
+    const clientas  = clientasR.data  || [];
+
+    const totalVentasMes  = ventasMes.reduce((s, v) => s + (+v.monto || 0), 0);
+    const prendasActivas  = invItems.filter(i => i.estado !== 'prestado' && i.estado !== 'prestada');
+    const prendasPrestadas = invItems.filter(i => i.estado === 'prestado' || i.estado === 'prestada');
+    const nivelBadge = { 'Básico': 'muted', 'Silver': '', 'Gold': 'warning', 'Platinum': 'accent' };
+
+    const logrosCount = stats.logros != null
+      ? (Array.isArray(stats.logros) ? stats.logros.length : +stats.logros || 0)
+      : null;
+
+    main.innerHTML = `
+      <div class="vis-detalle">
+        <button class="vis-back-btn" onclick="renderVendedoras()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px;flex-shrink:0"><path d="m15 18-6-6 6-6"/></svg>
+          Volver a visionarias
+        </button>
+
+        <div class="vis-perfil-header">
+          ${vend.foto_url
+            ? `<img src="${vend.foto_url}" class="vis-avatar" alt="">`
+            : `<div class="vis-avatar vis-avatar-placeholder">${(vend.nombre||'?').charAt(0).toUpperCase()}</div>`}
+          <div class="vis-perfil-info">
+            <h2 class="vis-nombre">${vend.nombre || '—'}</h2>
+            <div class="vis-meta">
+              <span class="badge badge-${nivelBadge[vend.nivel] || ''}">${vend.nivel || 'Básico'}</span>
+              ${vend.telefono ? `<span class="text-muted" style="font-size:0.85rem">${vend.telefono}</span>` : ''}
+              ${vend.email    ? `<span class="text-muted" style="font-size:0.85rem">${vend.email}</span>`    : ''}
+            </div>
+            <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="abrirFormVendedora('${vend.id}')">Editar visionaria</button>
+          </div>
+        </div>
+
+        <div class="vis-stats-grid">
+          ${stats.puntos        != null ? `<div class="vis-stat-card"><div class="vis-stat-val">${stats.puntos}</div><div class="vis-stat-label">Puntos</div></div>` : ''}
+          <div class="vis-stat-card accent"><div class="vis-stat-val">${formatPeso(totalVentasMes)}</div><div class="vis-stat-label">Ventas del mes</div></div>
+          <div class="vis-stat-card"><div class="vis-stat-val">${prendasActivas.length}</div><div class="vis-stat-label">Prendas activas</div></div>
+          <div class="vis-stat-card"><div class="vis-stat-val">${prendasPrestadas.length}</div><div class="vis-stat-label">Prestadas</div></div>
+          <div class="vis-stat-card"><div class="vis-stat-val">${clientas.length}</div><div class="vis-stat-label">Clientas</div></div>
+          <div class="vis-stat-card"><div class="vis-stat-val">${formatPeso(vend.credito || 0)}</div><div class="vis-stat-label">Crédito</div></div>
+          ${logrosCount != null ? `<div class="vis-stat-card"><div class="vis-stat-val">${logrosCount}</div><div class="vis-stat-label">Logros</div></div>` : ''}
+          ${stats.matches_totales != null ? `<div class="vis-stat-card"><div class="vis-stat-val">${stats.matches_totales}</div><div class="vis-stat-label">Matches</div></div>` : ''}
+        </div>
+
+        <div class="vis-section">
+          <div class="vis-section-title">Ventas del mes (${ventasMes.length})</div>
+          ${!ventasMes.length
+            ? '<p class="text-muted" style="padding:12px 0;font-size:0.85rem">Sin ventas este mes.</p>'
+            : `<div class="table-wrap"><table class="data-table">
+                <thead><tr><th>Fecha</th><th style="text-align:right">Monto</th></tr></thead>
+                <tbody>${ventasMes.map(v => `<tr>
+                  <td>${formatDate(v.fecha || v.created_at)}</td>
+                  <td style="text-align:right;font-weight:600;color:var(--success)">${formatPeso(v.monto)}</td>
+                </tr>`).join('')}</tbody>
+                <tfoot><tr>
+                  <td style="padding:10px 16px;font-weight:600;color:var(--text-muted)">Total</td>
+                  <td style="padding:10px 16px;text-align:right;font-weight:700;font-family:'Montserrat',sans-serif;color:var(--success)">${formatPeso(totalVentasMes)}</td>
+                </tr></tfoot>
+              </table></div>`}
+        </div>
+
+        <div class="vis-section">
+          <div class="vis-section-title">Prendas activas (${prendasActivas.length})</div>
+          ${!prendasActivas.length
+            ? '<p class="text-muted" style="padding:12px 0;font-size:0.85rem">Sin prendas en inventario.</p>'
+            : `<div class="vis-inv-grid">${prendasActivas.map(i => {
+                const p = i.prendas || {};
+                const foto = p.fotos_prendas?.[0]?.url;
+                return `<div class="vis-inv-card">
+                  ${foto ? `<img src="${foto}" alt="">` : `<div class="vis-inv-thumb-empty">👚</div>`}
+                  <div class="vis-inv-name">${p.nombre || '—'}</div>
+                  <div class="vis-inv-num">${p.numero || ''}</div>
+                </div>`;
+              }).join('')}</div>`}
+        </div>
+
+        ${prendasPrestadas.length ? `
+        <div class="vis-section">
+          <div class="vis-section-title">Prendas prestadas (${prendasPrestadas.length})</div>
+          <div class="vis-inv-grid">${prendasPrestadas.map(i => {
+            const p = i.prendas || {};
+            const foto = p.fotos_prendas?.[0]?.url;
+            return `<div class="vis-inv-card vis-inv-card--prest">
+              ${foto ? `<img src="${foto}" alt="">` : `<div class="vis-inv-thumb-empty">👗</div>`}
+              <div class="vis-inv-name">${p.nombre || '—'}</div>
+              <div class="vis-inv-num">${p.numero || ''}</div>
+            </div>`;
+          }).join('')}</div>
+        </div>` : ''}
+
+        <div class="vis-section">
+          <div class="vis-section-title">Clientas (${clientas.length})</div>
+          ${!clientas.length
+            ? '<p class="text-muted" style="padding:12px 0;font-size:0.85rem">Sin clientas registradas.</p>'
+            : `<div class="table-wrap"><table class="data-table">
+                <thead><tr><th>Nombre</th><th>Teléfono</th></tr></thead>
+                <tbody>${clientas.map(c => `<tr>
+                  <td class="td-name">${c.nombre}</td>
+                  <td>${c.telefono || '—'}</td>
+                </tr>`).join('')}</tbody>
+              </table></div>`}
+        </div>
       </div>`;
 
   } catch (err) {
-    listEl.innerHTML = `<div class="error-state">Error: ${err.message}</div>`;
+    main.innerHTML = `<div class="error-state">Error: ${err.message}<br>
+      <button class="btn btn-outline" style="margin-top:12px" onclick="renderVendedoras()">← Volver</button></div>`;
   }
 }
 
@@ -1417,7 +1581,7 @@ async function abrirFormVendedora(id = null) {
 
   openModal(`
     <div class="modal-header">
-      <h3>${v ? 'Editar vendedora' : 'Nueva vendedora'}</h3>
+      <h3>${v ? 'Editar visionaria' : 'Nueva visionaria'}</h3>
     </div>
     <form id="vendForm" class="modal-form">
       <div class="form-group">
@@ -1452,7 +1616,7 @@ async function abrirFormVendedora(id = null) {
         <label>Contraseña temporal${v ? ' — dejar vacío para no cambiar' : ''}</label>
         <div class="password-wrap">
           <input type="password" id="vPassword" autocomplete="new-password"
-            placeholder="${v ? 'Nueva contraseña (opcional)' : 'Contraseña de acceso para la vendedora'}">
+            placeholder="${v ? 'Nueva contraseña (opcional)' : 'Contraseña de acceso para la visionaria'}">
           <button type="button" class="toggle-pw" id="toggleVPw" tabindex="-1">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -1463,7 +1627,7 @@ async function abrirFormVendedora(id = null) {
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline" onclick="closeModal()">Cancelar</button>
-        <button type="submit" class="btn btn-primary">${v ? 'Guardar cambios' : 'Crear vendedora'}</button>
+        <button type="submit" class="btn btn-primary">${v ? 'Guardar cambios' : 'Crear visionaria'}</button>
       </div>
     </form>`);
 
@@ -1499,21 +1663,21 @@ async function abrirFormVendedora(id = null) {
     if (error) {
       showToast(error.message, 'error');
       btn.disabled = false;
-      btn.textContent = v ? 'Guardar cambios' : 'Crear vendedora';
+      btn.textContent = v ? 'Guardar cambios' : 'Crear visionaria';
     } else {
-      showToast(id ? 'Vendedora actualizada' : 'Vendedora creada');
+      showToast(id ? 'Visionaria actualizada' : 'Visionaria creada');
       closeModal();
-      loadVendedoras();
+      renderVendedoras();
     }
   });
 }
 
 async function deleteVendedora(id, nombre) {
-  if (!confirm(`¿Eliminar a "${nombre}"?\nSe eliminarán también sus prendas, pedidos y clientes.`)) return;
+  if (!confirm(`¿Eliminar a "${nombre}"?\nSe eliminarán también sus prendas, pedidos y clientas.`)) return;
   const { error } = await db.from('vendedoras').delete().eq('id', id);
   if (error) { showToast(error.message, 'error'); return; }
-  showToast('Vendedora eliminada');
-  loadVendedoras();
+  showToast('Visionaria eliminada');
+  renderVendedoras();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1534,7 +1698,7 @@ async function renderClientes() {
         <input type="text" id="clienteSearch" placeholder="Buscar clienta…" value="${_clienteSearch}">
       </div>
       <select id="clienteVendFilt" class="select-filter">
-        <option value="">Todas las vendedoras</option>
+        <option value="">Todas las visionarias</option>
       </select>
     </div>
     <div id="clientesStats" class="stats-row"></div>
@@ -1594,7 +1758,7 @@ async function loadClientes() {
       <div class="table-wrap">
         <table class="data-table">
           <thead><tr>
-            <th>Nombre</th><th>Vendedora</th><th>Teléfono</th>
+            <th>Nombre</th><th>Visionaria</th><th>Teléfono</th>
             <th>T. Ropa</th><th>T. Pantalón</th><th>T. Calzado</th>
             <th>Cumpleaños</th><th>Registro</th>
           </tr></thead>
@@ -1626,7 +1790,7 @@ async function renderFinanciero() {
   main.innerHTML = `<div class="fin-loading"><div class="spinner"></div> Calculando resumen…</div>`;
 
   try {
-    const [ventasR, abonosR, pedidosR, vendedorasR, clientesR, prendasR, gastosR] = await Promise.all([
+    const [ventasR, abonosR, pedidosR, vendedorasR, clientesR, prendasR, gastosR, detallesR] = await Promise.all([
       db.from('ventas').select('monto, fecha, created_at, vendedoras(nombre)'),
       db.from('abonos').select('monto, fecha, created_at'),
       db.from('pedidos').select('estado, created_at'),
@@ -1634,6 +1798,7 @@ async function renderFinanciero() {
       db.from('clientes').select('id, vendedora_id'),
       db.from('prendas').select('disponible, baja'),
       db.from('gastos').select('monto, mes, anio, categoria'),
+      db.from('detalle_pedidos').select('precio, prendas(precio_costo, numero, marca, fecha_adquisicion), pedidos(fecha, estado)'),
     ]);
 
     const ventas     = ventasR.data    || [];
@@ -1643,6 +1808,49 @@ async function renderFinanciero() {
     const clientes   = clientesR.data  || [];
     const prendas    = prendasR.data   || [];
     const gastosFin  = gastosR.data    || [];
+    const detallesTodos = detallesR.data || [];
+    const detalles = detallesTodos.filter(d => d.pedidos?.estado === 'Pagado' || d.pedidos?.estado === 'Entregado');
+
+    // Margen por prefijo de categoría
+    const PREFIJOS_CAT = { SAL: 'Saldo', RAC: 'Rack calidad', JOY: 'Joyería', INT: 'Interior' };
+    const margenCat = {};
+    Object.keys(PREFIJOS_CAT).forEach(p => { margenCat[p] = { total: 0, count: 0 }; });
+    detalles.forEach(d => {
+      if (!d.prendas) return;
+      const pf = (d.prendas.numero || '').slice(0, 3).toUpperCase();
+      if (!margenCat[pf]) return;
+      const pv = +d.precio || 0; const pc = +d.prendas.precio_costo || 0;
+      if (pv <= 0) return;
+      margenCat[pf].total += (pv - pc) / pv * 100;
+      margenCat[pf].count++;
+    });
+
+    // Top marcas por margen
+    const margenMarca = {};
+    detalles.forEach(d => {
+      if (!d.prendas?.marca) return;
+      const pv = +d.precio || 0; const pc = +d.prendas.precio_costo || 0;
+      if (pv <= 0) return;
+      const m = d.prendas.marca;
+      if (!margenMarca[m]) margenMarca[m] = { total: 0, count: 0 };
+      margenMarca[m].total += (pv - pc) / pv * 100;
+      margenMarca[m].count++;
+    });
+    const topMarcas = Object.entries(margenMarca)
+      .map(([m, d]) => ({ marca: m, margen: d.total / d.count, count: d.count }))
+      .sort((a, b) => b.margen - a.margen).slice(0, 5);
+
+    // Rotación por categoría
+    const rotCat = {};
+    Object.keys(PREFIJOS_CAT).forEach(p => { rotCat[p] = { total: 0, count: 0 }; });
+    detalles.forEach(d => {
+      if (!d.prendas?.fecha_adquisicion || !d.pedidos?.fecha) return;
+      const pf = (d.prendas.numero || '').slice(0, 3).toUpperCase();
+      if (!rotCat[pf]) return;
+      const dias = Math.max(0, Math.round((new Date(d.pedidos.fecha) - new Date(d.prendas.fecha_adquisicion)) / 86400000));
+      rotCat[pf].total += dias; rotCat[pf].count++;
+    });
+    const maxMargen = Math.max(...Object.values(margenCat).map(d => d.count > 0 ? d.total / d.count : 0), 1);
 
     const totalVentas  = ventas.reduce((s, v) => s + (v.monto || 0), 0);
     const totalAbonos  = abonos.reduce((s, a) => s + (a.monto || 0), 0);
@@ -1725,7 +1933,7 @@ async function renderFinanciero() {
       <!-- KPIs secundarios -->
       <div class="fin-grid fin-grid-3">
         <div class="kpi-card">
-          <div class="kpi-label">Vendedoras</div>
+          <div class="kpi-label">Visionarias</div>
           <div class="kpi-value">${vendedoras.length}</div>
         </div>
         <div class="kpi-card">
@@ -1760,7 +1968,7 @@ async function renderFinanciero() {
         </div>
 
         <div class="fin-card">
-          <h3 class="fin-card-title">Top vendedoras por ventas</h3>
+          <h3 class="fin-card-title">Top visionarias por ventas</h3>
           <div class="vendedoras-rank">
             ${topVendedoras.length === 0
               ? '<p class="text-muted">Sin datos de ventas aún.</p>'
@@ -1771,6 +1979,62 @@ async function renderFinanciero() {
                   <span class="rank-value">${formatPeso(monto)}</span>
                 </div>`).join('')}
           </div>
+        </div>
+      </div>
+
+      <!-- Rentabilidad -->
+      <div class="fin-section-divider">Rentabilidad</div>
+      <div class="fin-row">
+        <div class="fin-card">
+          <h3 class="fin-card-title">Margen promedio por categoría</h3>
+          <div style="display:flex;flex-direction:column;gap:14px">
+            ${Object.entries(PREFIJOS_CAT).map(([pf, label]) => {
+              const d   = margenCat[pf];
+              const avg = d.count > 0 ? d.total / d.count : 0;
+              const pct = maxMargen > 0 ? avg / maxMargen * 100 : 0;
+              const color = avg >= 40 ? '#22c55e' : avg >= 20 ? '#DEFF00' : '#855AA2';
+              return `<div class="rent-bar-row">
+                <div class="rent-bar-label">
+                  <span>${label}</span>
+                  <span class="rent-bar-pct" style="color:${color}">${avg.toFixed(1)}%</span>
+                </div>
+                <div class="rent-bar-track">
+                  <div class="rent-bar-fill" style="width:${Math.min(100,pct)}%;background:${color}"></div>
+                </div>
+                <span class="text-muted" style="font-size:0.72rem">${d.count} vtas.</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+
+        <div class="fin-card">
+          <h3 class="fin-card-title">Marcas más rentables</h3>
+          ${!topMarcas.length
+            ? '<p class="text-muted">Sin datos todavía.</p>'
+            : topMarcas.map((m, i) => `
+              <div class="rank-row" style="gap:8px">
+                <span class="rank-num">${i+1}</span>
+                <span class="rank-name">${m.marca}</span>
+                <span class="rent-margen-badge">${m.margen.toFixed(1)}%</span>
+                <span class="text-muted" style="font-size:0.73rem;margin-left:auto">${m.count} vtas.</span>
+              </div>`).join('')}
+        </div>
+      </div>
+
+      <div class="fin-card" style="margin-top:16px">
+        <h3 class="fin-card-title">Rotación de inventario — días promedio entre adquisición y venta</h3>
+        <div class="rot-grid">
+          ${Object.entries(PREFIJOS_CAT).map(([pf, label]) => {
+            const d   = rotCat[pf];
+            const avg = d.count > 0 ? Math.round(d.total / d.count) : null;
+            const color = avg != null ? (avg <= 14 ? '#22c55e' : avg <= 30 ? '#DEFF00' : '#855AA2') : null;
+            return `<div class="rot-card">
+              <div class="rot-dias" style="${color ? `color:${color}` : ''}">${avg != null ? avg : '—'}</div>
+              <div class="rot-sub">${avg != null ? 'días promedio' : 'sin datos'}</div>
+              <div class="rot-cat">${label}</div>
+              ${d.count > 0 ? `<div class="rot-count">${d.count} prendas</div>` : ''}
+            </div>`;
+          }).join('')}
         </div>
       </div>`;
 
@@ -1849,7 +2113,7 @@ async function loadDevoluciones() {
       <div class="table-wrap">
         <table class="data-table">
           <thead><tr>
-            <th>Vendedora</th><th>ID Prenda</th><th>Prenda</th>
+            <th>Visionaria</th><th>ID Prenda</th><th>Prenda</th>
             <th>Motivo</th><th>Fecha</th><th>Estado</th><th>Acciones</th>
           </tr></thead>
           <tbody>
@@ -1890,7 +2154,7 @@ function contactarVendedora(devId) {
   const dev = _devCache.get(devId);
   if (!dev) return;
   const telefono = dev.vendedoras?.telefono;
-  if (!telefono) { showToast('Esta vendedora no tiene teléfono registrado', 'error'); return; }
+  if (!telefono) { showToast('Esta visionaria no tiene teléfono registrado', 'error'); return; }
   const numero   = telefono.replace(/\D/g, '');
   const prenda   = dev.prendas?.nombre || 'la prenda';
   const msg      = encodeURIComponent(
