@@ -1619,6 +1619,12 @@ img { max-width: 100%; display: block; }
   white-space: nowrap;
 }
 
+.td-medidas-inv {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .td-desc-gasto {
   font-size: 0.83rem;
   color: var(--text-muted);

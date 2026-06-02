@@ -3,6 +3,32 @@
 // ── Constantes ────────────────────────────────────────────────────────────────
 const CATEGORIAS     = ['Blusa','Pantalón','Vestido','Falda','Chamarra','Conjunto','Sudadera','Short','Zapatos','Bolsa','Accesorio','Otro'];
 const NIVELES        = ['Básico','Silver','Gold','Platinum'];
+const MEDIDAS_POR_CATEGORIA = {
+  Pantalón:  ['Cintura', 'Cadera'],  Leggings:  ['Cintura', 'Cadera'],
+  Pants:     ['Cintura', 'Cadera'],  Short:     ['Cintura', 'Cadera'],
+  Bermuda:   ['Cintura', 'Cadera'],  Jeans:     ['Cintura', 'Cadera'],
+  Blusa:     ['Busto',   'Largo'],   Camisa:    ['Busto',   'Largo'],
+  Blusón:    ['Busto',   'Largo'],   Playera:   ['Busto',   'Largo'],
+  Sudadera:  ['Busto',   'Largo'],   'Suéter':  ['Busto',   'Largo'],
+  Vestido:   ['Busto',   'Cintura'], Jumpsuit:  ['Busto',   'Cintura'],
+  Chamarra:  ['Busto',   'Largo'],   Abrigo:    ['Busto',   'Largo'],
+  Gabardina: ['Busto',   'Largo'],   Blazer:    ['Busto',   'Largo'],
+  Saco:      ['Busto',   'Largo'],   Chaleco:   ['Busto',   'Largo'],
+  Falda:     ['Cintura', 'Largo'],
+};
+
+function getMedidas(categoria) {
+  return MEDIDAS_POR_CATEGORIA[categoria] || ['Medida 1', 'Medida 2'];
+}
+
+function actualizarLabelesMedidas(prefix, categoria) {
+  const [m1, m2] = getMedidas(categoria === '__nueva__' ? '' : (categoria || ''));
+  const l1 = document.getElementById(`${prefix}Medida1Label`);
+  const l2 = document.getElementById(`${prefix}Medida2Label`);
+  if (l1) l1.textContent = `${m1} (cm)`;
+  if (l2) l2.textContent = `${m2} (cm)`;
+}
+
 const CATEGORIAS_GASTOS = [
   { grupo: 'Compras',     items: ['Paca RAC', 'Paca SAL', 'Compra directa'] },
   { grupo: 'Operación',   items: ['Insumos', 'Salarios', 'Comisiones', 'Empaques', 'Capacitación'] },
@@ -121,6 +147,21 @@ async function renderPrendas() {
             <div class="form-group">
               <label>Talla real</label>
               <input type="text" id="fTallaReal" placeholder="Ej: M, L">
+            </div>
+          </div>
+        </div>
+
+        <!-- 2b. Medidas -->
+        <div class="form-section">
+          <div class="form-section-title">Medidas</div>
+          <div class="form-grid form-grid-2">
+            <div class="form-group">
+              <label id="fMedida1Label">Medida 1 (cm)</label>
+              <input type="number" id="fMedida1Valor" min="0" step="0.5" placeholder="0">
+            </div>
+            <div class="form-group">
+              <label id="fMedida2Label">Medida 2 (cm)</label>
+              <input type="number" id="fMedida2Valor" min="0" step="0.5" placeholder="0">
             </div>
           </div>
         </div>
@@ -302,6 +343,9 @@ async function renderPrendas() {
   document.getElementById('fPrecioMin').addEventListener('input', calcularPreciosAuto);
   document.getElementById('fId').addEventListener('input', calcularPreciosAuto);
   bindCatNuevaForm('fCategoria', 'fCatNuevaWrap', 'fCatNuevaInput', 'fCatNuevaBtn', 'fCatNuevaCancelar');
+  document.getElementById('fCategoria').addEventListener('change', e => {
+    actualizarLabelesMedidas('f', e.target.value);
+  });
 }
 
 function bindCatNuevaForm(selectId, wrapId, inputId, btnAddId, btnCancelId, tableName = 'categorias_prendas') {
@@ -565,6 +609,10 @@ async function handlePrendaSubmit(e) {
       vendedora_id:      document.getElementById('fVendedora').value           || null,
       talla_etiqueta:    document.getElementById('fTallaEtiqueta').value.trim()|| null,
       talla_real:        document.getElementById('fTallaReal').value.trim()    || null,
+      medida_1_nombre:   getMedidas(document.getElementById('fCategoria').value)[0],
+      medida_1_valor:    parseFloat(document.getElementById('fMedida1Valor').value) || null,
+      medida_2_nombre:   getMedidas(document.getElementById('fCategoria').value)[1],
+      medida_2_valor:    parseFloat(document.getElementById('fMedida2Valor').value) || null,
       precio_costo:      parseFloat(document.getElementById('fPrecioVendedora').value) || 0,
       precio_min:        parseFloat(document.getElementById('fPrecioMin').value)       || 0,
       precio_max:        parseFloat(document.getElementById('fPrecioMax').value)       || 0,
@@ -687,7 +735,7 @@ async function loadInventario() {
     });
 
     let q = db.from('prendas')
-      .select('id, nombre, marca, categoria, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, emoji, fecha_adquisicion, vendedoras(nombre), fotos_prendas(url)')
+      .select('id, nombre, marca, categoria, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, precio_costo, precio_min, precio_max, disponible, baja, emoji, fecha_adquisicion, vendedoras(nombre), fotos_prendas(url)')
       .order('created_at', { ascending: false });
 
     if (_invFilter === 'disponible') q = q.eq('disponible', true).eq('baja', false);
@@ -725,7 +773,7 @@ async function loadInventario() {
           <thead><tr>
             <th>Foto</th><th>ID</th><th>Nombre</th><th>Marca</th>
             <th>Categoría</th><th>Talla</th><th>Costo</th>
-            <th>Min / Max</th><th>Visionaria</th><th>Estado</th><th>Adquirida</th><th>Vendida</th><th>Acciones</th>
+            <th>Min / Max</th><th>Visionaria</th><th>Estado</th><th>Medidas</th><th>Adquirida</th><th>Vendida</th><th>Acciones</th>
           </tr></thead>
           <tbody>
             ${prendas.map(p => {
@@ -743,6 +791,9 @@ async function loadInventario() {
                 <td class="td-precios">${formatPeso(p.precio_min)} – ${formatPeso(p.precio_max)}</td>
                 <td>${p.vendedoras?.nombre || '<span class="text-muted">Catálogo</span>'}</td>
                 <td>${estadoBadge(p)}</td>
+                <td class="td-medidas-inv">${(p.medida_1_valor != null || p.medida_2_valor != null)
+                    ? `${p.medida_1_nombre || 'M1'}: ${p.medida_1_valor ?? '—'} / ${p.medida_2_nombre || 'M2'}: ${p.medida_2_valor ?? '—'}`
+                    : '<span class="text-muted">—</span>'}</td>
                 <td style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap">${p.fecha_adquisicion ? formatDate(p.fecha_adquisicion) : '—'}</td>
                 <td style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap">${ventaFechaMap[p.id] ? formatDate(ventaFechaMap[p.id]) : '—'}</td>
                 <td class="td-actions">
@@ -811,7 +862,7 @@ async function abrirEditarPrenda(id) {
 
   // Try fetching with optional columns (numero, categoria); fall back if they don't exist yet
   let p, hasExtras = true;
-  const fullSel = 'id, nombre, marca, color, categoria, departamento, numero, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
+  const fullSel = 'id, nombre, marca, color, categoria, departamento, numero, emoji, gradiente, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
   const safeSel = 'id, nombre, marca, color, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
 
   let { data, error } = await db.from('prendas').select(fullSel).eq('id', id).single();
@@ -912,6 +963,20 @@ async function abrirEditarPrenda(id) {
       </div>
 
       <div class="edit-section">
+        <div class="form-section-title">Medidas</div>
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label id="eMedida1Label">${escHtml(p.medida_1_nombre || getMedidas(p.categoria || '')[0])} (cm)</label>
+            <input type="number" id="eMedida1Valor" min="0" step="0.5" value="${p.medida_1_valor != null ? p.medida_1_valor : ''}" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label id="eMedida2Label">${escHtml(p.medida_2_nombre || getMedidas(p.categoria || '')[1])} (cm)</label>
+            <input type="number" id="eMedida2Valor" min="0" step="0.5" value="${p.medida_2_valor != null ? p.medida_2_valor : ''}" placeholder="0">
+          </div>
+        </div>
+      </div>
+
+      <div class="edit-section">
         <div class="form-section-title">Precios</div>
         <div class="form-grid form-grid-3">
           <div class="form-group">
@@ -987,6 +1052,11 @@ async function abrirEditarPrenda(id) {
 
   _renderEditFotos();
   bindCatNuevaForm('eCategoria', 'eCatNuevaWrap', 'eCatNuevaInput', 'eCatNuevaBtn', 'eCatNuevaCancelar');
+  if (hasExtras) {
+    document.getElementById('eCategoria')?.addEventListener('change', e => {
+      actualizarLabelesMedidas('e', e.target.value);
+    });
+  }
 
   document.getElementById('editFotosInput').addEventListener('change', e => {
     const valid = Array.from(e.target.files).filter(f => f.type.startsWith('image/') && f.size <= 5 * 1024 * 1024);
@@ -1059,8 +1129,12 @@ async function guardarEditPrenda(id, hasExtras) {
       color:          document.getElementById('eColor').value.trim()         || null,
       departamento:   document.getElementById('eDepartamento').value         || null,
       vendedora_id:   document.getElementById('eVendedora').value            || null,
-      talla_etiqueta: document.getElementById('eTallaEtiqueta').value.trim() || null,
-      talla_real:     document.getElementById('eTallaReal').value.trim()     || null,
+      talla_etiqueta:  document.getElementById('eTallaEtiqueta').value.trim() || null,
+      talla_real:      document.getElementById('eTallaReal').value.trim()     || null,
+      medida_1_nombre: (document.getElementById('eMedida1Label')?.textContent || '').replace(' (cm)', '') || null,
+      medida_1_valor:  parseFloat(document.getElementById('eMedida1Valor')?.value) || null,
+      medida_2_nombre: (document.getElementById('eMedida2Label')?.textContent || '').replace(' (cm)', '') || null,
+      medida_2_valor:  parseFloat(document.getElementById('eMedida2Valor')?.value) || null,
       precio_costo:   parseFloat(document.getElementById('eCosto').value)    || 0,
       precio_min:     parseFloat(document.getElementById('ePrecioMin').value) || 0,
       precio_max:     parseFloat(document.getElementById('ePrecioMax').value) || 0,

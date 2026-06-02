@@ -69,6 +69,12 @@ INSERT INTO subcategorias_insumos (nombre) VALUES
   ('Alcohol'), ('Bolsas'), ('Ganchos'), ('Muebles'), ('Aparatos'), ('Cinta'), ('Empaques')
 ON CONFLICT (nombre) DO NOTHING;
 
+-- ── Medidas de prendas ───────────────────────────────────────────────────────
+alter table prendas add column if not exists medida_1_nombre text;
+alter table prendas add column if not exists medida_1_valor  numeric;
+alter table prendas add column if not exists medida_2_nombre text;
+alter table prendas add column if not exists medida_2_valor  numeric;
+
 -- ── Departamento y fecha de adquisición en prendas ──────────────────────────
 alter table prendas add column if not exists departamento      text not null default 'DAMA';
 alter table prendas add column if not exists fecha_adquisicion timestamptz;
