@@ -25,6 +25,54 @@ alter table prendas add column if not exists baja             boolean not null d
 alter table prendas add column if not exists descripcion      text;
 alter table prendas add column if not exists color            text;
 
+-- ── Tabla de categorías de prendas ──────────────────────────────────────────
+create table if not exists categorias_prendas (
+  id         uuid        primary key default gen_random_uuid(),
+  nombre     text        not null unique,
+  created_at timestamptz not null default now()
+);
+
+alter table categorias_prendas disable row level security;
+
+-- Poblar con las categorías base (idempotente)
+insert into categorias_prendas (nombre) values
+  ('Blusa'), ('Pantalón'), ('Vestido'), ('Falda'), ('Chamarra'),
+  ('Conjunto'), ('Sudadera'), ('Short'), ('Zapatos'), ('Bolsa'),
+  ('Accesorio'), ('Otro')
+on conflict (nombre) do nothing;
+
+-- ── Gastos operativos ────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS gastos (
+  id           UUID      DEFAULT gen_random_uuid() PRIMARY KEY,
+  categoria    TEXT      NOT NULL,
+  subcategoria TEXT,
+  descripcion  TEXT,
+  monto        NUMERIC   NOT NULL,
+  fecha        TIMESTAMPTZ DEFAULT now(),
+  mes          INTEGER,
+  anio         INTEGER,
+  created_at   TIMESTAMP DEFAULT now()
+);
+
+ALTER TABLE gastos DISABLE ROW LEVEL SECURITY;
+
+-- ── Subcategorías de insumos ──────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS subcategorias_insumos (
+  id         UUID      DEFAULT gen_random_uuid() PRIMARY KEY,
+  nombre     TEXT      NOT NULL UNIQUE,
+  created_at TIMESTAMP DEFAULT now()
+);
+
+ALTER TABLE subcategorias_insumos DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO subcategorias_insumos (nombre) VALUES
+  ('Alcohol'), ('Bolsas'), ('Ganchos'), ('Muebles'), ('Aparatos'), ('Cinta'), ('Empaques')
+ON CONFLICT (nombre) DO NOTHING;
+
+-- ── Departamento y fecha de adquisición en prendas ──────────────────────────
+alter table prendas add column if not exists departamento      text not null default 'DAMA';
+alter table prendas add column if not exists fecha_adquisicion timestamptz;
+
 -- ── Nivel en vendedoras ──────────────────────────────────────────────────────
 alter table vendedoras add column if not exists nivel text not null default 'Básico';
 

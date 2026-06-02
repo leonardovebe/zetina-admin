@@ -3,6 +3,13 @@
 // ── Constantes ────────────────────────────────────────────────────────────────
 const CATEGORIAS     = ['Blusa','Pantalón','Vestido','Falda','Chamarra','Conjunto','Sudadera','Short','Zapatos','Bolsa','Accesorio','Otro'];
 const NIVELES        = ['Básico','Silver','Gold','Platinum'];
+const CATEGORIAS_GASTOS = [
+  { grupo: 'Compras',     items: ['Paca RAC', 'Paca SAL', 'Compra directa'] },
+  { grupo: 'Operación',   items: ['Insumos', 'Salarios', 'Comisiones', 'Empaques', 'Capacitación'] },
+  { grupo: 'Tecnología',  items: ['IAs', 'Mantenimiento web', 'Software'] },
+  { grupo: 'Ventas',      items: ['Publicidad', 'Envíos', 'Muestras'] },
+  { grupo: 'Otros',       items: ['Gasolina', 'Casetas', 'Contabilidad', 'Otros'] },
+];
 const ESTADOS_PEDIDO = ['En proceso','Pagado','En camino','Entregado'];
 
 // ── Utilidades ────────────────────────────────────────────────────────────────
@@ -48,7 +55,9 @@ const SECTION_TITLES = {
   pedidos:      'Pedidos',
   vendedoras:   'Vendedoras',
   clientes:     'Clientas',
-  devoluciones: 'Devoluciones'
+  devoluciones: 'Devoluciones',
+  gastos:       'Gastos',
+  categorias:   'Categorías de Prendas',
 };
 
 function navigate(section) {
@@ -68,7 +77,7 @@ function navigate(section) {
   const renders = { financiero: renderFinanciero, prendas: renderPrendas,
     inventario: renderInventario, pedidos: renderPedidos,
     vendedoras: renderVendedoras, clientes: renderClientes,
-    devoluciones: renderDevoluciones };
+    devoluciones: renderDevoluciones, gastos: renderGastos, categorias: renderCategorias };
   if (renders[section]) renders[section]();
 }
 
@@ -80,7 +89,11 @@ let selectedFotosEtiqueta = [];
 
 async function renderPrendas() {
   const main = document.getElementById('sectionContent');
-  const { data: vendedoras } = await db.from('vendedoras').select('id, nombre').order('nombre');
+  const [{ data: vendedoras }, { data: cats }] = await Promise.all([
+    db.from('vendedoras').select('id, nombre').order('nombre'),
+    db.from('categorias_prendas').select('id, nombre').order('nombre'),
+  ]);
+  const categorias = cats || [];
 
   main.innerHTML = `
     <div class="upload-form-container">
@@ -102,7 +115,7 @@ async function renderPrendas() {
           <div class="form-section-title">Tallas</div>
           <div class="form-grid form-grid-2">
             <div class="form-group">
-              <label>Talla etiqueta</label>
+              <label>Talla marcada</label>
               <input type="text" id="fTallaEtiqueta" placeholder="Ej: L, XL, 38">
             </div>
             <div class="form-group">
@@ -151,8 +164,15 @@ async function renderPrendas() {
             </div>
           </div>
 
-          <!-- 5. Color + meta -->
+          <!-- 5. Departamento, Color + meta -->
           <div class="form-grid">
+            <div class="form-group">
+              <label>Departamento</label>
+              <select id="fDepartamento">
+                <option value="DAMA" selected>DAMA</option>
+                <option value="CABALLERO">CABALLERO</option>
+              </select>
+            </div>
             <div class="form-group">
               <label>Color</label>
               <input type="text" id="fColor" placeholder="Ej: Negro, Rosa, Multicolor">
@@ -161,8 +181,14 @@ async function renderPrendas() {
               <label>Categoría</label>
               <select id="fCategoria">
                 <option value="">Sin categoría</option>
-                ${CATEGORIAS.map(c => `<option value="${c}">${c}</option>`).join('')}
+                ${categorias.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('')}
+                <option value="__nueva__">＋ Nueva categoría</option>
               </select>
+              <div id="fCatNuevaWrap" class="cat-nueva-inline hidden">
+                <input type="text" id="fCatNuevaInput" placeholder="Nombre de la categoría…" maxlength="60">
+                <button type="button" id="fCatNuevaBtn" class="btn-cat-add">Agregar</button>
+                <button type="button" id="fCatNuevaCancelar" class="btn-cat-cancel">✕</button>
+              </div>
             </div>
             <div class="form-group">
               <label>Asignar a vendedora</label>
@@ -275,6 +301,62 @@ async function renderPrendas() {
   document.getElementById('prendaForm').addEventListener('submit', handlePrendaSubmit);
   document.getElementById('fPrecioMin').addEventListener('input', calcularPreciosAuto);
   document.getElementById('fId').addEventListener('input', calcularPreciosAuto);
+  bindCatNuevaForm('fCategoria', 'fCatNuevaWrap', 'fCatNuevaInput', 'fCatNuevaBtn', 'fCatNuevaCancelar');
+}
+
+function bindCatNuevaForm(selectId, wrapId, inputId, btnAddId, btnCancelId, tableName = 'categorias_prendas') {
+  const sel    = document.getElementById(selectId);
+  const wrap   = document.getElementById(wrapId);
+  const input  = document.getElementById(inputId);
+  const btnAdd = document.getElementById(btnAddId);
+  const btnCan = document.getElementById(btnCancelId);
+  if (!sel || !wrap) return;
+
+  sel.addEventListener('change', () => {
+    if (sel.value === '__nueva__') {
+      wrap.classList.remove('hidden');
+      input.focus();
+    } else {
+      wrap.classList.add('hidden');
+    }
+  });
+
+  const cancelar = () => {
+    wrap.classList.add('hidden');
+    input.value = '';
+    sel.value = '';
+  };
+  if (btnCan) btnCan.addEventListener('click', cancelar);
+
+  btnAdd.addEventListener('click', async () => {
+    const nombre = input.value.trim();
+    if (!nombre) { showToast('Escribe un nombre para la categoría', 'info'); input.focus(); return; }
+
+    btnAdd.disabled = true;
+    const prev = btnAdd.textContent;
+    btnAdd.textContent = '…';
+
+    const { data, error } = await db.from(tableName).insert({ nombre }).select().single();
+    btnAdd.disabled = false;
+    btnAdd.textContent = prev;
+
+    if (error) {
+      showToast(
+        (error.message.includes('duplicate') || error.message.includes('unique'))
+          ? 'Esa categoría ya existe'
+          : error.message,
+        'error'
+      );
+      return;
+    }
+
+    const opt = new Option(data.nombre, data.nombre, true, true);
+    sel.insertBefore(opt, sel.querySelector('option[value="__nueva__"]'));
+    sel.value = data.nombre;
+    wrap.classList.add('hidden');
+    input.value = '';
+    showToast(`Categoría "${data.nombre}" agregada`);
+  });
 }
 
 function calcularPreciosAuto() {
@@ -474,20 +556,22 @@ async function handlePrendaSubmit(e) {
       como_presentarla: document.getElementById('fComoPresentarla').value.trim() || null,
     };
     const prendaData = {
-      numero:         document.getElementById('fId').value.trim(),
-      nombre:         document.getElementById('fNombre').value.trim(),
-      marca:          document.getElementById('fMarca').value.trim()        || null,
-      color:          document.getElementById('fColor').value.trim()        || null,
-      categoria:      document.getElementById('fCategoria').value           || null,
-      vendedora_id:   document.getElementById('fVendedora').value           || null,
-      talla_etiqueta: document.getElementById('fTallaEtiqueta').value.trim()|| null,
-      talla_real:     document.getElementById('fTallaReal').value.trim()    || null,
-      precio_costo:   parseFloat(document.getElementById('fPrecioVendedora').value) || 0,
-      precio_min:     parseFloat(document.getElementById('fPrecioMin').value)       || 0,
-      precio_max:     parseFloat(document.getElementById('fPrecioMax').value)       || 0,
-      disponible:     true,
-      baja:           false,
-      descripcion:    Object.values(_desc).some(Boolean) ? JSON.stringify(_desc) : null,
+      numero:            document.getElementById('fId').value.trim(),
+      nombre:            document.getElementById('fNombre').value.trim(),
+      marca:             document.getElementById('fMarca').value.trim()        || null,
+      color:             document.getElementById('fColor').value.trim()        || null,
+      categoria:         document.getElementById('fCategoria').value           || null,
+      departamento:      document.getElementById('fDepartamento').value        || 'DAMA',
+      vendedora_id:      document.getElementById('fVendedora').value           || null,
+      talla_etiqueta:    document.getElementById('fTallaEtiqueta').value.trim()|| null,
+      talla_real:        document.getElementById('fTallaReal').value.trim()    || null,
+      precio_costo:      parseFloat(document.getElementById('fPrecioVendedora').value) || 0,
+      precio_min:        parseFloat(document.getElementById('fPrecioMin').value)       || 0,
+      precio_max:        parseFloat(document.getElementById('fPrecioMax').value)       || 0,
+      disponible:        true,
+      baja:              false,
+      fecha_adquisicion: new Date().toISOString(),
+      descripcion:       Object.values(_desc).some(Boolean) ? JSON.stringify(_desc) : null,
     };
 
     const { data: prenda, error } = await db.from('prendas').insert(prendaData).select().single();
@@ -706,11 +790,15 @@ async function deletePrenda(id, nombre) {
 }
 
 async function abrirEditarPrenda(id) {
-  const { data: vendedoras } = await db.from('vendedoras').select('id, nombre').order('nombre');
+  const [{ data: vendedoras }, { data: cats }] = await Promise.all([
+    db.from('vendedoras').select('id, nombre').order('nombre'),
+    db.from('categorias_prendas').select('id, nombre').order('nombre'),
+  ]);
+  const categorias = cats || [];
 
   // Try fetching with optional columns (numero, categoria); fall back if they don't exist yet
   let p, hasExtras = true;
-  const fullSel = 'id, nombre, marca, color, categoria, numero, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
+  const fullSel = 'id, nombre, marca, color, categoria, departamento, numero, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
   const safeSel = 'id, nombre, marca, color, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
 
   let { data, error } = await db.from('prendas').select(fullSel).eq('id', id).single();
@@ -770,9 +858,22 @@ async function abrirEditarPrenda(id) {
             <label>Categoría</label>
             <select id="eCategoria">
               <option value="">Sin categoría</option>
-              ${CATEGORIAS.map(c => `<option value="${c}" ${p.categoria === c ? 'selected' : ''}>${c}</option>`).join('')}
+              ${categorias.map(c => `<option value="${c.nombre}" ${p.categoria === c.nombre ? 'selected' : ''}>${c.nombre}</option>`).join('')}
+              <option value="__nueva__">＋ Nueva categoría</option>
             </select>
+            <div id="eCatNuevaWrap" class="cat-nueva-inline hidden">
+              <input type="text" id="eCatNuevaInput" placeholder="Nombre de la categoría…" maxlength="60">
+              <button type="button" id="eCatNuevaBtn" class="btn-cat-add">Agregar</button>
+              <button type="button" id="eCatNuevaCancelar" class="btn-cat-cancel">✕</button>
+            </div>
           </div>` : ''}
+          <div class="form-group">
+            <label>Departamento</label>
+            <select id="eDepartamento">
+              <option value="DAMA"      ${(p.departamento || 'DAMA') === 'DAMA'      ? 'selected' : ''}>DAMA</option>
+              <option value="CABALLERO" ${p.departamento === 'CABALLERO' ? 'selected' : ''}>CABALLERO</option>
+            </select>
+          </div>
           <div class="form-group">
             <label>Vendedora</label>
             <select id="eVendedora">
@@ -787,7 +888,7 @@ async function abrirEditarPrenda(id) {
         <div class="form-section-title">Tallas</div>
         <div class="form-grid form-grid-2">
           <div class="form-group">
-            <label>Talla etiqueta</label>
+            <label>Talla marcada</label>
             <input type="text" id="eTallaEtiqueta" value="${p.talla_etiqueta || ''}">
           </div>
           <div class="form-group">
@@ -872,6 +973,7 @@ async function abrirEditarPrenda(id) {
     </form>`, true);
 
   _renderEditFotos();
+  bindCatNuevaForm('eCategoria', 'eCatNuevaWrap', 'eCatNuevaInput', 'eCatNuevaBtn', 'eCatNuevaCancelar');
 
   document.getElementById('editFotosInput').addEventListener('change', e => {
     const valid = Array.from(e.target.files).filter(f => f.type.startsWith('image/') && f.size <= 5 * 1024 * 1024);
@@ -942,6 +1044,7 @@ async function guardarEditPrenda(id, hasExtras) {
       nombre:         document.getElementById('eNombre').value.trim(),
       marca:          document.getElementById('eMarca').value.trim()         || null,
       color:          document.getElementById('eColor').value.trim()         || null,
+      departamento:   document.getElementById('eDepartamento').value         || null,
       vendedora_id:   document.getElementById('eVendedora').value            || null,
       talla_etiqueta: document.getElementById('eTallaEtiqueta').value.trim() || null,
       talla_real:     document.getElementById('eTallaReal').value.trim()     || null,
@@ -1523,21 +1626,23 @@ async function renderFinanciero() {
   main.innerHTML = `<div class="fin-loading"><div class="spinner"></div> Calculando resumen…</div>`;
 
   try {
-    const [ventasR, abonosR, pedidosR, vendedorasR, clientesR, prendasR] = await Promise.all([
+    const [ventasR, abonosR, pedidosR, vendedorasR, clientesR, prendasR, gastosR] = await Promise.all([
       db.from('ventas').select('monto, fecha, created_at, vendedoras(nombre)'),
       db.from('abonos').select('monto, fecha, created_at'),
       db.from('pedidos').select('estado, created_at'),
       db.from('vendedoras').select('id, nombre, credito, nivel'),
       db.from('clientes').select('id, vendedora_id'),
-      db.from('prendas').select('disponible, baja')
+      db.from('prendas').select('disponible, baja'),
+      db.from('gastos').select('monto, mes, anio, categoria'),
     ]);
 
-    const ventas    = ventasR.data    || [];
-    const abonos    = abonosR.data    || [];
-    const pedidos   = pedidosR.data   || [];
-    const vendedoras= vendedorasR.data|| [];
-    const clientes  = clientesR.data  || [];
-    const prendas   = prendasR.data   || [];
+    const ventas     = ventasR.data    || [];
+    const abonos     = abonosR.data    || [];
+    const pedidos    = pedidosR.data   || [];
+    const vendedoras = vendedorasR.data|| [];
+    const clientes   = clientesR.data  || [];
+    const prendas    = prendasR.data   || [];
+    const gastosFin  = gastosR.data    || [];
 
     const totalVentas  = ventas.reduce((s, v) => s + (v.monto || 0), 0);
     const totalAbonos  = abonos.reduce((s, a) => s + (a.monto || 0), 0);
@@ -1549,6 +1654,13 @@ async function renderFinanciero() {
     const abonosMes = abonos.filter(a => (a.fecha || a.created_at || '').slice(0, 7) === mesActual);
     const totalVentasMes  = ventasMes.reduce((s, v) => s + (v.monto || 0), 0);
     const totalAbonosMes  = abonosMes.reduce((s, a) => s + (a.monto || 0), 0);
+
+    const mesNum  = now.getMonth() + 1;
+    const anioNum = now.getFullYear();
+    const gastosMesArr       = gastosFin.filter(g => g.mes === mesNum && g.anio === anioNum);
+    const totalGastosMes     = gastosMesArr.reduce((s, g) => s + (+g.monto || 0), 0);
+    const totalGastosHistorico = gastosFin.reduce((s, g) => s + (+g.monto || 0), 0);
+    const utilidadNeta       = totalVentasMes - totalGastosMes;
 
     const pedCounts = Object.fromEntries(ESTADOS_PEDIDO.map(e => [e, 0]));
     pedidos.forEach(p => { if (pedCounts[p.estado] !== undefined) pedCounts[p.estado]++; });
@@ -1588,6 +1700,25 @@ async function renderFinanciero() {
           <div class="kpi-label">Ventas este mes</div>
           <div class="kpi-value">${formatPeso(totalVentasMes)}</div>
           <div class="kpi-sub">Abonos mes: ${formatPeso(totalAbonosMes)}</div>
+        </div>
+      </div>
+
+      <!-- KPIs gastos -->
+      <div class="fin-grid fin-grid-3">
+        <div class="kpi-card kpi-danger">
+          <div class="kpi-label">Gastos del mes</div>
+          <div class="kpi-value">${formatPeso(totalGastosMes)}</div>
+          <div class="kpi-sub">${gastosMesArr.length} gastos registrados</div>
+        </div>
+        <div class="kpi-card ${utilidadNeta >= 0 ? 'kpi-accent' : 'kpi-warning'}">
+          <div class="kpi-label">Utilidad neta del mes</div>
+          <div class="kpi-value">${formatPeso(utilidadNeta)}</div>
+          <div class="kpi-sub">Ventas − Gastos</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Gastos históricos</div>
+          <div class="kpi-value">${formatPeso(totalGastosHistorico)}</div>
+          <div class="kpi-sub">${gastosFin.length} registros totales</div>
         </div>
       </div>
 
@@ -1819,6 +1950,512 @@ async function rechazarDevolucion(devId) {
   } catch (err) {
     showToast(`Error: ${err.message}`, 'error');
   }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  SECCIÓN: GASTOS
+// ══════════════════════════════════════════════════════════════════════════════
+let _gastosFilter = {};
+
+async function renderGastos() {
+  const now = new Date();
+  if (!_gastosFilter.mes) {
+    _gastosFilter = { mes: now.getMonth() + 1, anio: now.getFullYear(), categoria: '' };
+  }
+  const main = document.getElementById('sectionContent');
+  const mesesNombres = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const mesesOpts = mesesNombres.map((m, i) =>
+    `<option value="${i+1}" ${_gastosFilter.mes === i+1 ? 'selected' : ''}>${m}</option>`).join('');
+  const aniosOpts = [now.getFullYear()-1, now.getFullYear()]
+    .map(y => `<option value="${y}" ${_gastosFilter.anio === y ? 'selected' : ''}>${y}</option>`).join('');
+  const catOpts = CATEGORIAS_GASTOS.flatMap(g => g.items)
+    .map(c => `<option value="${c}" ${_gastosFilter.categoria === c ? 'selected' : ''}>${c}</option>`).join('');
+
+  main.innerHTML = `
+    <div id="gastosStats" class="stats-row"></div>
+    <div class="section-toolbar">
+      <div class="gastos-filtros">
+        <select id="gastosMesFilt" class="select-filter">${mesesOpts}</select>
+        <select id="gastosAnioFilt" class="select-filter">${aniosOpts}</select>
+        <select id="gastosCatFilt" class="select-filter">
+          <option value="" ${!_gastosFilter.categoria ? 'selected' : ''}>Todas las categorías</option>
+          ${catOpts}
+        </select>
+      </div>
+      <button class="btn btn-primary" id="btnAbrirGasto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:15px;height:15px;flex-shrink:0"><path d="M12 5v14M5 12h14"/></svg>
+        Registrar gasto
+      </button>
+    </div>
+    <div id="gastosListEl"></div>
+    <div class="gastos-subcats-section">
+      <div class="gastos-subcats-title">Subcategorías de Insumos</div>
+      <div id="gastosSubcatsEl"><div class="table-loading">Cargando…</div></div>
+    </div>`;
+
+  document.getElementById('btnAbrirGasto').addEventListener('click', abrirModalGasto);
+  ['gastosMesFilt','gastosAnioFilt','gastosCatFilt'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => {
+      _gastosFilter.mes       = +document.getElementById('gastosMesFilt').value;
+      _gastosFilter.anio      = +document.getElementById('gastosAnioFilt').value;
+      _gastosFilter.categoria =  document.getElementById('gastosCatFilt').value;
+      _loadGastosLista();
+      _loadGastosStats();
+    });
+  });
+
+  await Promise.all([_loadGastosLista(), _loadGastosStats(), _loadSubcatsInsumos()]);
+}
+
+async function _loadGastosStats() {
+  const statsEl = document.getElementById('gastosStats');
+  if (!statsEl) return;
+
+  const [{ data: gastosMesD }, { data: gastosAll }] = await Promise.all([
+    db.from('gastos').select('monto, categoria').eq('mes', _gastosFilter.mes).eq('anio', _gastosFilter.anio),
+    db.from('gastos').select('monto'),
+  ]);
+
+  const totalMes       = (gastosMesD || []).reduce((s, g) => s + (+g.monto || 0), 0);
+  const totalHistorico = (gastosAll  || []).reduce((s, g) => s + (+g.monto || 0), 0);
+
+  const desglose = {};
+  (gastosMesD || []).forEach(g => { desglose[g.categoria] = (desglose[g.categoria] || 0) + (+g.monto || 0); });
+  const topCats = Object.entries(desglose).sort((a, b) => b[1] - a[1]).slice(0, 4);
+
+  statsEl.innerHTML = `
+    <div class="stat-chip accent">
+      <span class="stat-num">${formatPeso(totalMes)}</span>
+      <span class="stat-label">Gastos del período</span>
+    </div>
+    <div class="stat-chip muted">
+      <span class="stat-num">${formatPeso(totalHistorico)}</span>
+      <span class="stat-label">Total histórico</span>
+    </div>
+    ${topCats.map(([cat, monto]) => `
+    <div class="stat-chip warning">
+      <span class="stat-num" style="font-size:0.88rem">${formatPeso(monto)}</span>
+      <span class="stat-label">${cat}</span>
+    </div>`).join('')}`;
+}
+
+async function _loadGastosLista() {
+  const listEl = document.getElementById('gastosListEl');
+  if (!listEl) return;
+  listEl.innerHTML = '<div class="table-loading">Cargando…</div>';
+
+  try {
+    let q = db.from('gastos')
+      .select('id, categoria, subcategoria, descripcion, monto, fecha')
+      .eq('mes', _gastosFilter.mes)
+      .eq('anio', _gastosFilter.anio)
+      .order('fecha', { ascending: false });
+    if (_gastosFilter.categoria) q = q.eq('categoria', _gastosFilter.categoria);
+
+    const { data: gastos, error } = await q;
+    if (error) throw error;
+
+    if (!(gastos || []).length) {
+      listEl.innerHTML = '<div class="empty-state">No hay gastos registrados para este período.</div>';
+      return;
+    }
+
+    const total = gastos.reduce((s, g) => s + (+g.monto || 0), 0);
+
+    listEl.innerHTML = `
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th>Fecha</th><th>Categoría</th><th>Subcategoría</th>
+            <th>Descripción</th><th style="text-align:right">Monto</th><th></th>
+          </tr></thead>
+          <tbody>
+            ${gastos.map(g => `<tr>
+              <td style="white-space:nowrap">${formatDate(g.fecha)}</td>
+              <td><span class="gasto-cat-badge">${escHtml(g.categoria)}</span></td>
+              <td style="color:var(--text-muted);font-size:0.83rem">${g.subcategoria ? escHtml(g.subcategoria) : '—'}</td>
+              <td class="td-desc-gasto">${g.descripcion ? escHtml(g.descripcion) : '<span class="text-muted">—</span>'}</td>
+              <td style="text-align:right;font-weight:600;color:var(--danger);white-space:nowrap">${formatPeso(g.monto)}</td>
+              <td><button class="btn-icon btn-danger" title="Eliminar" onclick="deleteGasto('${g.id}')">🗑</button></td>
+            </tr>`).join('')}
+          </tbody>
+          <tfoot>
+            <tr class="gastos-tfoot-row">
+              <td colspan="4">Total del período</td>
+              <td style="text-align:right">${formatPeso(total)}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>`;
+  } catch (err) {
+    listEl.innerHTML = `<div class="error-state">Error: ${err.message}</div>`;
+  }
+}
+
+async function abrirModalGasto() {
+  const { data: subcats } = await db.from('subcategorias_insumos').select('id, nombre').order('nombre');
+  const subcatsList = subcats || [];
+  const today = new Date().toISOString().split('T')[0];
+
+  const catOptgroups = CATEGORIAS_GASTOS.map(grupo =>
+    `<optgroup label="${grupo.grupo}">${grupo.items.map(item =>
+      `<option value="${item}">${item}</option>`).join('')}</optgroup>`
+  ).join('');
+
+  const subcatsOpts = subcatsList.map(s =>
+    `<option value="${s.nombre}">${s.nombre}</option>`).join('');
+
+  openModal(`
+    <div class="modal-header">
+      <h3>Registrar gasto</h3>
+    </div>
+    <form id="gastoForm" class="modal-form">
+      <div class="form-group">
+        <label>Categoría *</label>
+        <select id="gCategoria" required>
+          <option value="">Selecciona una categoría</option>
+          ${catOptgroups}
+        </select>
+      </div>
+      <div id="gSubcatWrap" class="hidden">
+        <div class="form-group" style="margin-top:4px">
+          <label>Subcategoría de insumo</label>
+          <select id="gSubcategoria">
+            <option value="">Sin subcategoría</option>
+            ${subcatsOpts}
+            <option value="__nueva__">＋ Nueva subcategoría</option>
+          </select>
+          <div id="gSubcatNuevaWrap" class="cat-nueva-inline hidden">
+            <input type="text" id="gSubcatNuevaInput" placeholder="Nombre de la subcategoría…" maxlength="60">
+            <button type="button" id="gSubcatNuevaBtn" class="btn-cat-add">Agregar</button>
+            <button type="button" id="gSubcatNuevaCancelar" class="btn-cat-cancel">✕</button>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Descripción</label>
+        <input type="text" id="gDescripcion" placeholder="Detalle del gasto (opcional)…" maxlength="200">
+      </div>
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label>Monto *</label>
+          <div class="input-prefix">
+            <span>$</span>
+            <input type="number" id="gMonto" min="0.01" step="0.01" placeholder="0.00" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Fecha *</label>
+          <input type="date" id="gFecha" value="${today}" required>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="btn btn-primary" id="gastoSubmitBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:15px;height:15px;flex-shrink:0"><path d="M5 12l5 5L20 7"/></svg>
+          Guardar gasto
+        </button>
+      </div>
+    </form>`);
+
+  document.getElementById('gCategoria').addEventListener('change', e => {
+    document.getElementById('gSubcatWrap').classList.toggle('hidden', e.target.value !== 'Insumos');
+    if (e.target.value !== 'Insumos') document.getElementById('gSubcategoria').value = '';
+  });
+  bindCatNuevaForm('gSubcategoria', 'gSubcatNuevaWrap', 'gSubcatNuevaInput', 'gSubcatNuevaBtn', 'gSubcatNuevaCancelar', 'subcategorias_insumos');
+  document.getElementById('gastoForm').addEventListener('submit', _handleGastoSubmit);
+}
+
+async function _handleGastoSubmit(e) {
+  e.preventDefault();
+  const btn = document.getElementById('gastoSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Guardando…';
+
+  try {
+    const fechaVal  = document.getElementById('gFecha').value;
+    const fechaDate = new Date(fechaVal + 'T12:00:00');
+    const categoria = document.getElementById('gCategoria').value;
+    const subcatEl  = document.getElementById('gSubcategoria');
+    const subcatVal = subcatEl?.value;
+
+    const payload = {
+      categoria,
+      subcategoria:  (categoria === 'Insumos' && subcatVal && subcatVal !== '__nueva__') ? subcatVal : null,
+      descripcion:   document.getElementById('gDescripcion').value.trim() || null,
+      monto:         parseFloat(document.getElementById('gMonto').value) || 0,
+      fecha:         new Date(fechaVal + 'T12:00:00').toISOString(),
+      mes:           fechaDate.getMonth() + 1,
+      anio:          fechaDate.getFullYear(),
+    };
+
+    const { error } = await db.from('gastos').insert(payload);
+    if (error) throw error;
+
+    closeModal();
+    showToast('Gasto registrado correctamente.');
+    _gastosFilter.mes  = payload.mes;
+    _gastosFilter.anio = payload.anio;
+    await Promise.all([_loadGastosLista(), _loadGastosStats()]);
+
+  } catch (err) {
+    showToast(err.message || 'Error al guardar el gasto', 'error');
+    btn.disabled = false;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:15px;height:15px;flex-shrink:0"><path d="M5 12l5 5L20 7"/></svg> Guardar gasto`;
+  }
+}
+
+async function deleteGasto(id) {
+  if (!confirm('¿Eliminar este gasto?')) return;
+  const { error } = await db.from('gastos').delete().eq('id', id);
+  if (error) { showToast(error.message, 'error'); return; }
+  showToast('Gasto eliminado');
+  await Promise.all([_loadGastosLista(), _loadGastosStats()]);
+}
+
+async function _loadSubcatsInsumos() {
+  const el = document.getElementById('gastosSubcatsEl');
+  if (!el) return;
+
+  const { data: subcats, error } = await db.from('subcategorias_insumos').select('id, nombre').order('nombre');
+  if (error) { el.innerHTML = `<div class="error-state">Error: ${error.message}</div>`; return; }
+
+  el.innerHTML = `
+    <div class="cats-add-row">
+      <input type="text" id="subcatNewInput" class="cat-text-input" placeholder="Nueva subcategoría de insumo…" maxlength="60">
+      <button class="btn btn-primary btn-sm" id="subcatAddBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px;flex-shrink:0"><path d="M12 5v14M5 12h14"/></svg>
+        Agregar
+      </button>
+    </div>
+    <div class="cats-list">
+      ${!(subcats || []).length
+        ? '<p class="text-muted" style="padding:16px 20px;font-size:0.85rem">No hay subcategorías todavía.</p>'
+        : (subcats || []).map(s => `
+          <div class="cat-item" data-id="${s.id}" data-nombre="${escHtml(s.nombre)}">
+            <div class="cat-item-view">
+              <span class="cat-item-name">${escHtml(s.nombre)}</span>
+              <div class="cat-item-actions">
+                <button class="btn-sm btn-danger subcat-del-btn">Eliminar</button>
+              </div>
+            </div>
+          </div>`).join('')}
+    </div>`;
+
+  document.getElementById('subcatAddBtn').addEventListener('click', _agregarSubcat);
+  document.getElementById('subcatNewInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') _agregarSubcat();
+  });
+  document.querySelectorAll('.subcat-del-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const item   = btn.closest('.cat-item');
+      const nombre = item.dataset.nombre;
+      const id     = item.dataset.id;
+      if (!confirm(`¿Eliminar la subcategoría "${nombre}"?`)) return;
+      btn.disabled = true;
+      const { error } = await db.from('subcategorias_insumos').delete().eq('id', id);
+      if (error) { showToast(error.message, 'error'); btn.disabled = false; return; }
+      showToast(`"${nombre}" eliminada`);
+      await _loadSubcatsInsumos();
+    });
+  });
+}
+
+async function _agregarSubcat() {
+  const input  = document.getElementById('subcatNewInput');
+  const nombre = (input?.value || '').trim();
+  if (!nombre) { showToast('Escribe un nombre para la subcategoría', 'info'); input?.focus(); return; }
+  const btn = document.getElementById('subcatAddBtn');
+  btn.disabled = true;
+  const { error } = await db.from('subcategorias_insumos').insert({ nombre });
+  btn.disabled = false;
+  if (error) {
+    showToast(
+      (error.message.includes('duplicate') || error.message.includes('unique')) ? 'Esa subcategoría ya existe' : error.message,
+      'error'
+    );
+    return;
+  }
+  input.value = '';
+  showToast(`Subcategoría "${nombre}" agregada`);
+  await _loadSubcatsInsumos();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  SECCIÓN: CATEGORÍAS
+// ══════════════════════════════════════════════════════════════════════════════
+async function renderCategorias() {
+  document.getElementById('sectionContent').innerHTML = '<div class="table-loading">Cargando categorías…</div>';
+  await _loadCategoriasSection();
+}
+
+async function _loadCategoriasSection() {
+  const main = document.getElementById('sectionContent');
+  try {
+    const { data: cats, error } = await db.from('categorias_prendas').select('id, nombre').order('nombre');
+    if (error) throw error;
+
+    main.innerHTML = `
+      <div class="cats-container">
+        <div class="cats-add-row">
+          <input type="text" id="catNewInput" class="cat-text-input" placeholder="Nueva categoría…" maxlength="60">
+          <button class="btn btn-primary btn-sm" id="catAddBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px;flex-shrink:0">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            Agregar
+          </button>
+        </div>
+        <div class="cats-list" id="catsList">
+          ${!(cats || []).length
+            ? '<p class="text-muted" style="padding:20px">No hay categorías. Agrega la primera arriba.</p>'
+            : (cats || []).map(_catItemHtml).join('')}
+        </div>
+      </div>`;
+
+    document.getElementById('catAddBtn').addEventListener('click', _agregarCat);
+    document.getElementById('catNewInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') _agregarCat();
+    });
+    _bindCatListActions();
+
+  } catch (err) {
+    if (err.message && err.message.includes('does not exist')) {
+      main.innerHTML = `<div class="error-state" style="font-size:0.875rem">
+        <p>La tabla <strong>categorias_prendas</strong> no existe en la base de datos.</p>
+        <p style="margin-top:8px;color:var(--text-muted)">Ejecuta la migración SQL en Supabase → SQL Editor para crearla.</p>
+      </div>`;
+    } else {
+      main.innerHTML = `<div class="error-state">Error: ${err.message}</div>`;
+    }
+  }
+}
+
+function _catItemHtml(cat) {
+  return `
+    <div class="cat-item" data-id="${cat.id}" data-nombre="${escHtml(cat.nombre)}">
+      <div class="cat-item-view">
+        <span class="cat-item-name">${escHtml(cat.nombre)}</span>
+        <div class="cat-item-actions">
+          <button class="btn-sm btn-outline cat-edit-btn">Editar</button>
+          <button class="btn-sm btn-danger cat-del-btn">Eliminar</button>
+        </div>
+      </div>
+      <div class="cat-item-edit hidden">
+        <input type="text" class="cat-edit-input cat-text-input" value="${escHtml(cat.nombre)}" maxlength="60">
+        <button class="btn-sm btn-primary cat-save-btn">Guardar</button>
+        <button class="btn-sm btn-outline cat-cancel-btn">Cancelar</button>
+      </div>
+    </div>`;
+}
+
+function _bindCatListActions() {
+  document.querySelectorAll('.cat-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = btn.closest('.cat-item');
+      item.querySelector('.cat-item-view').classList.add('hidden');
+      item.querySelector('.cat-item-edit').classList.remove('hidden');
+      item.querySelector('.cat-edit-input').focus();
+    });
+  });
+
+  document.querySelectorAll('.cat-cancel-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = btn.closest('.cat-item');
+      item.querySelector('.cat-edit-input').value = item.dataset.nombre;
+      item.querySelector('.cat-item-view').classList.remove('hidden');
+      item.querySelector('.cat-item-edit').classList.add('hidden');
+    });
+  });
+
+  document.querySelectorAll('.cat-save-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const item = btn.closest('.cat-item');
+      const id = item.dataset.id;
+      const nuevoNombre = item.querySelector('.cat-edit-input').value.trim();
+      if (!nuevoNombre) { showToast('El nombre no puede estar vacío', 'error'); return; }
+
+      btn.disabled = true;
+      btn.textContent = '…';
+
+      const { error } = await db.from('categorias_prendas').update({ nombre: nuevoNombre }).eq('id', id);
+      if (error) {
+        showToast(
+          (error.message.includes('duplicate') || error.message.includes('unique'))
+            ? 'Esa categoría ya existe'
+            : error.message,
+          'error'
+        );
+        btn.disabled = false;
+        btn.textContent = 'Guardar';
+        return;
+      }
+
+      showToast('Categoría actualizada');
+      await _loadCategoriasSection();
+    });
+  });
+
+  document.querySelectorAll('.cat-del-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const item = btn.closest('.cat-item');
+      const id = item.dataset.id;
+      const nombre = item.dataset.nombre;
+
+      btn.disabled = true;
+      const { count, error: cntErr } = await db
+        .from('prendas')
+        .select('*', { count: 'exact', head: true })
+        .eq('categoria', nombre);
+      btn.disabled = false;
+
+      if (cntErr) { showToast(cntErr.message, 'error'); return; }
+
+      if (count > 0) {
+        showToast(
+          `No se puede eliminar: ${count} prenda${count > 1 ? 's' : ''} usa${count > 1 ? 'n' : ''} esta categoría`,
+          'error'
+        );
+        return;
+      }
+
+      if (!confirm(`¿Eliminar la categoría "${nombre}"?`)) return;
+
+      btn.disabled = true;
+      const { error } = await db.from('categorias_prendas').delete().eq('id', id);
+      if (error) { showToast(error.message, 'error'); btn.disabled = false; return; }
+
+      showToast(`Categoría "${nombre}" eliminada`);
+      await _loadCategoriasSection();
+    });
+  });
+}
+
+async function _agregarCat() {
+  const input = document.getElementById('catNewInput');
+  const nombre = (input?.value || '').trim();
+  if (!nombre) { showToast('Escribe un nombre para la categoría', 'info'); input?.focus(); return; }
+
+  const btn = document.getElementById('catAddBtn');
+  btn.disabled = true;
+
+  const { error } = await db.from('categorias_prendas').insert({ nombre });
+  btn.disabled = false;
+
+  if (error) {
+    showToast(
+      (error.message.includes('duplicate') || error.message.includes('unique'))
+        ? 'Esa categoría ya existe'
+        : error.message,
+      'error'
+    );
+    return;
+  }
+
+  input.value = '';
+  showToast(`Categoría "${nombre}" agregada`);
+  await _loadCategoriasSection();
 }
 
 // ── Helpers internos ──────────────────────────────────────────────────────────
