@@ -1386,7 +1386,7 @@ async function eliminarPedido(id) {
 
 async function verDetallePedido(pedidoId) {
   const { data: p } = await db.from('pedidos')
-    .select('*, vendedoras(nombre), detalle_pedidos(*)')
+    .select('*, vendedoras(nombre), detalle_pedidos(*), direccion_entrega_texto')
     .eq('id', pedidoId).single();
   if (!p) return;
 
@@ -1397,6 +1397,7 @@ async function verDetallePedido(pedidoId) {
     <div class="modal-header">
       <h3>Pedido ${p.numero || formatZtId(p.id)}</h3>
       <p class="text-muted">${p.vendedoras?.nombre || '—'} · ${formatDate(p.fecha || p.created_at)}</p>
+      ${p.direccion_entrega_texto ? `<p class="text-muted" style="font-size:0.8rem;margin-top:4px">📦 ${p.direccion_entrega_texto}</p>` : ''}
     </div>
     <div class="modal-section">
       ${!items.length ? '<p class="text-muted">Sin artículos registrados.</p>' : `

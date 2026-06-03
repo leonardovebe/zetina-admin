@@ -69,6 +69,34 @@ INSERT INTO subcategorias_insumos (nombre) VALUES
   ('Alcohol'), ('Bolsas'), ('Ganchos'), ('Muebles'), ('Aparatos'), ('Cinta'), ('Empaques')
 ON CONFLICT (nombre) DO NOTHING;
 
+-- ── Medidas de clientas (inferidas del historial de compras) ─────────────────
+alter table clientes add column if not exists medida_cintura       numeric;
+alter table clientes add column if not exists medida_busto         numeric;
+alter table clientes add column if not exists medida_cadera        numeric;
+alter table clientes add column if not exists medida_actualizada_en timestamptz;
+
+-- ── Direcciones de envío de visionarias ───────────────────────────────────────
+create table if not exists direcciones_vendedoras (
+  id             uuid        primary key default gen_random_uuid(),
+  vendedora_id   uuid        not null references vendedoras(id) on delete cascade,
+  alias          text        not null default 'Casa',
+  calle          text        not null,
+  num_exterior   text        not null,
+  num_interior   text,
+  colonia        text        not null,
+  municipio      text        not null,
+  estado_dir     text        not null,
+  codigo_postal  text        not null,
+  referencias    text,
+  predeterminada boolean     not null default false,
+  created_at     timestamptz not null default now()
+);
+alter table direcciones_vendedoras disable row level security;
+
+-- ── Dirección de entrega en pedidos ──────────────────────────────────────────
+alter table pedidos add column if not exists direccion_entrega_id   uuid references direcciones_vendedoras(id) on delete set null;
+alter table pedidos add column if not exists direccion_entrega_texto text;
+
 -- ── Medidas de prendas ───────────────────────────────────────────────────────
 alter table prendas add column if not exists medida_1_nombre text;
 alter table prendas add column if not exists medida_1_valor  numeric;
