@@ -275,6 +275,8 @@ async function renderPrendas() {
           </div>
         </div>
 
+        <p class="fotos-note">Puedes agregar las fotos después. La prenda aparecerá en el catálogo hasta que la actives manualmente.</p>
+
         <!-- Fotos de etiquetas -->
         <div class="form-section">
           <div class="form-section-title">
@@ -390,6 +392,7 @@ async function renderPrendas() {
   });
 
   loadCategorias().then(fillCategoriaSelect);
+  updateIAButton();
 }
 
 function bindCatNuevaForm(selectId, wrapId, inputId, btnAddId, btnCancelId, tableName = 'categorias_prendas') {
@@ -515,7 +518,9 @@ function updateIAButton() {
   const btn = document.getElementById('btnGenerarIA');
   if (!btn) return;
   const hasPhotos = selectedFotosPrenda.length > 0 || selectedFotosEtiqueta.length > 0;
-  btn.disabled = !hasPhotos || btn.classList.contains('loading');
+  const row = btn.closest('.ia-btn-row');
+  if (row) row.classList.toggle('hidden', !hasPhotos);
+  btn.disabled = btn.classList.contains('loading');
 }
 
 function _compressImage(file) {
@@ -660,7 +665,7 @@ async function handlePrendaSubmit(e) {
       precio_costo:      parseFloat(document.getElementById('fPrecioCosto').value)    || 0,
       precio_min:        parseFloat(document.getElementById('fPrecioMin').value)       || 0,
       precio_max:        parseFloat(document.getElementById('fPrecioMax').value)       || 0,
-      disponible:        true,
+      disponible:        false,
       baja:              false,
       fecha_adquisicion: new Date().toISOString(),
       descripcion:       Object.values(_desc).some(Boolean) ? JSON.stringify(_desc) : null,
@@ -698,13 +703,7 @@ async function handlePrendaSubmit(e) {
       errEl.innerHTML = `<strong>Error al subir ${uploadErrors} foto(s):</strong><pre>${errDetail}</pre>`;
       document.getElementById('prendaForm').appendChild(errEl);
     } else {
-      showToast(`Prenda "${prenda.nombre}" guardada exitosamente.`);
-      // Notificación push a todas las vendedoras (best-effort)
-      fetch('/api/notify-new-prenda', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre: prenda.nombre }),
-      }).catch(() => {});
+      showToast(`Prenda "${prenda.nombre}" guardada. Actívala en Inventario para publicarla.`, 'info');
     }
 
   } catch (err) {
@@ -841,14 +840,24 @@ async function loadInventario() {
                 <td style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap">${p.fecha_adquisicion ? formatDate(p.fecha_adquisicion) : '—'}</td>
                 <td style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap">${ventaFechaMap[p.id] ? formatDate(ventaFechaMap[p.id]) : '—'}</td>
                 <td class="td-actions">
-                  <button class="btn-sm btn-outline" onclick="abrirEditarPrenda('${p.id}')">Editar</button>
-                  ${!p.baja
-                    ? `<button class="btn-icon" title="${p.disponible ? 'Marcar vendida' : 'Marcar disponible'}"
-                         onclick="toggleDisp('${p.id}',${p.disponible})">${p.disponible ? '✓' : '↩'}</button>
-                       <button class="btn-icon btn-warn" title="Dar de baja" onclick="darBaja('${p.id}')">↓</button>`
-                    : `<button class="btn-icon" title="Reactivar" onclick="reactivar('${p.id}')">↑</button>`}
-                  <button class="btn-icon btn-danger" title="Eliminar"
-                    onclick="deletePrenda('${p.id}','${escQ(p.nombre)}')">🗑</button>
+                  ${(() => {
+                    const st = prendaPublishState(p);
+                    return `
+                      <button class="btn-sm btn-outline" onclick="abrirEditarPrenda('${p.id}')">Editar</button>
+                      ${(st === 'incompleta' || st === 'lista')
+                        ? `<button class="btn-sm btn-outline" title="Agregar fotos" onclick="abrirEditarPrenda('${p.id}')">📷 Fotos</button>`
+                        : ''}
+                      ${st === 'lista'
+                        ? `<button class="btn-sm btn-publish" onclick="publicarPrenda('${p.id}')">✅ Publicar</button>`
+                        : ''}
+                      ${!p.baja
+                        ? `<button class="btn-icon" title="${p.disponible ? 'Marcar vendida' : 'Marcar disponible'}"
+                             onclick="toggleDisp('${p.id}',${p.disponible})">${p.disponible ? '✓' : '↩'}</button>
+                           <button class="btn-icon btn-warn" title="Dar de baja" onclick="darBaja('${p.id}')">↓</button>`
+                        : `<button class="btn-icon" title="Reactivar" onclick="reactivar('${p.id}')">↑</button>`}
+                      <button class="btn-icon btn-danger" title="Eliminar"
+                        onclick="deletePrenda('${p.id}','${escQ(p.nombre)}')">🗑</button>`;
+                  })()}
                 </td>
               </tr>`;
             }).join('')}
@@ -861,10 +870,27 @@ async function loadInventario() {
   }
 }
 
+function prendaPublishState(p) {
+  if (p.baja)       return 'baja';
+  if (p.disponible) return 'publicada';
+  if (p.fotos_prendas?.length > 0) return 'lista';
+  return 'incompleta';
+}
+
 function estadoBadge(p) {
-  if (p.baja)       return '<span class="badge badge-muted">Baja</span>';
-  if (p.disponible) return '<span class="badge badge-success">Disponible</span>';
-  return '<span class="badge badge-warning">Vendida</span>';
+  if (p.baja) return '<span class="badge badge-muted">Baja</span>';
+  switch (prendaPublishState(p)) {
+    case 'publicada':   return '<span class="badge badge-success">Publicada</span>';
+    case 'lista':       return '<span class="badge badge-warning">Lista para publicar</span>';
+    default:            return '<span class="badge badge-muted">Incompleta</span>';
+  }
+}
+
+async function publicarPrenda(id) {
+  const { error } = await db.from('prendas').update({ disponible: true }).eq('id', id);
+  if (error) { showToast(error.message, 'error'); return; }
+  showToast('Prenda publicada al catálogo');
+  loadInventario();
 }
 
 async function toggleDisp(id, current) {

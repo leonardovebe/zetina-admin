@@ -270,6 +270,15 @@ img { max-width: 100%; display: block; }
 .btn-icon.btn-warn { color: var(--warning); }
 .btn-icon.btn-danger { color: var(--danger); }
 
+.btn-publish {
+  background: rgba(22,163,74,0.1);
+  color: var(--success);
+  border: 1px solid rgba(22,163,74,0.3);
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.btn-publish:hover { background: rgba(22,163,74,0.18); }
+
 /* ══════════════════════════════════════════════════════════════════════════
    DASHBOARD LAYOUT
 ══════════════════════════════════════════════════════════════════════════ */
@@ -868,6 +877,15 @@ img { max-width: 100%; display: block; }
 }
 
 /* ── Botón Generar con IA ─────────────────────────────────────────────────── */
+.fotos-note {
+  font-size: 0.8rem;
+  color: var(--purple);
+  background: var(--accent-dim);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  margin: 0 0 4px;
+}
+
 .ia-btn-row {
   display: flex;
   align-items: center;
