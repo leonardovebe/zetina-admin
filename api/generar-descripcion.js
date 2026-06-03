@@ -55,7 +55,7 @@ module.exports = async function handler(req, res) {
 
 Analiza las imágenes y devuelve ÚNICAMENTE un JSON válido sin markdown, sin explicaciones, sin texto adicional antes o después. El JSON debe tener exactamente estos campos:
 {
-  "nombre": "nombre comercial y atractivo de la prenda en español, máx 60 caracteres. Debe sonar a boutique, no a mercado.",
+  "nombre": "nombre comercial y atractivo de la prenda en español. Máximo 5 palabras en total, incluyendo la marca si la hay. Ejemplo correcto: 'Blazer Structured Negro Theory'. Ejemplo incorrecto: 'Elegante Blazer Structured de Corte Recto en Color Negro'. Debe sonar a boutique, no a mercado.",
   "marca": "marca si es legible en alguna imagen, o null si no se ve",
   "color": "color o colores principales de la prenda en términos elegantes (ej: vino, nude, azul marino, marfil)",
   "talla": "talla exacta tal como aparece en la etiqueta (ej: S, M, L, XL, XS, 38, 40, 28, 30) o null",

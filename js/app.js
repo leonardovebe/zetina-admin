@@ -153,9 +153,9 @@ async function renderPrendas() {
     <div class="upload-form-container">
       <form id="prendaForm" class="prenda-form">
 
-        <!-- 1. ID -->
+        <!-- 1. ID / Número -->
         <div class="form-section">
-          <div class="form-section-title">ID</div>
+          <div class="form-section-title">ID / Número</div>
           <div class="form-grid form-grid-2">
             <div class="form-group">
               <label>ID de la prenda *</label>
@@ -164,22 +164,38 @@ async function renderPrendas() {
           </div>
         </div>
 
-        <!-- 2. Tallas -->
+        <!-- 2. Departamento -->
         <div class="form-section">
-          <div class="form-section-title">Tallas</div>
+          <div class="form-section-title">Departamento</div>
           <div class="form-grid form-grid-2">
             <div class="form-group">
-              <label>Talla marcada</label>
-              <input type="text" id="fTallaEtiqueta" placeholder="Ej: L, XL, 38">
-            </div>
-            <div class="form-group">
-              <label>Talla real</label>
-              <input type="text" id="fTallaReal" placeholder="Ej: M, L">
+              <select id="fDepartamento">
+                <option value="DAMA" selected>DAMA</option>
+                <option value="CABALLERO">CABALLERO</option>
+              </select>
             </div>
           </div>
         </div>
 
-        <!-- 2b. Medidas -->
+        <!-- 3. Categoría -->
+        <div class="form-section">
+          <div class="form-section-title">Categoría</div>
+          <div class="form-grid form-grid-2">
+            <div class="form-group">
+              <select id="fCategoria">
+                <option value="">Sin categoría</option>
+                <option value="__nueva__">＋ Nueva categoría</option>
+              </select>
+              <div id="fCatNuevaWrap" class="cat-nueva-inline hidden">
+                <input type="text" id="fCatNuevaInput" placeholder="Nombre de la categoría…" maxlength="60">
+                <button type="button" id="fCatNuevaBtn" class="btn-cat-add">Agregar</button>
+                <button type="button" id="fCatNuevaCancelar" class="btn-cat-cancel">✕</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Medidas (dinámicas según categoría) -->
         <div class="form-section">
           <div class="form-section-title">Medidas</div>
           <div class="form-grid form-grid-2">
@@ -194,10 +210,31 @@ async function renderPrendas() {
           </div>
         </div>
 
-        <!-- 3. Precios -->
+        <!-- 5. Tallas -->
+        <div class="form-section">
+          <div class="form-section-title">Tallas</div>
+          <div class="form-grid form-grid-2">
+            <div class="form-group">
+              <label>Talla marcada</label>
+              <input type="text" id="fTallaEtiqueta" placeholder="Ej: L, XL, 38">
+            </div>
+            <div class="form-group">
+              <label>Talla real</label>
+              <input type="text" id="fTallaReal" placeholder="Ej: M, L">
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Precios -->
         <div class="form-section">
           <div class="form-section-title">Precios</div>
-          <div class="form-grid form-grid-3">
+          <div class="form-grid form-grid-2">
+            <div class="form-group">
+              <label>Precio costo</label>
+              <div class="input-prefix"><span>$</span>
+                <input type="number" id="fPrecioCosto" min="0" step="0.01" placeholder="0.00">
+              </div>
+            </div>
             <div class="form-group">
               <label>Precio mínimo</label>
               <div class="input-prefix"><span>$</span>
@@ -219,56 +256,7 @@ async function renderPrendas() {
           </div>
         </div>
 
-        <!-- 4. Nombre y Marca -->
-        <div class="form-section">
-          <div class="form-section-title">Información</div>
-          <div class="form-grid form-grid-2">
-            <div class="form-group">
-              <label>Nombre *</label>
-              <input type="text" id="fNombre" required placeholder="Ej: Blusa Floral Rosa">
-            </div>
-            <div class="form-group">
-              <label>Marca</label>
-              <input type="text" id="fMarca" placeholder="Ej: Shein, Zara…">
-            </div>
-          </div>
-
-          <!-- 5. Departamento, Color + meta -->
-          <div class="form-grid">
-            <div class="form-group">
-              <label>Departamento</label>
-              <select id="fDepartamento">
-                <option value="DAMA" selected>DAMA</option>
-                <option value="CABALLERO">CABALLERO</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Color</label>
-              <input type="text" id="fColor" placeholder="Ej: Negro, Rosa, Multicolor">
-            </div>
-            <div class="form-group">
-              <label>Categoría</label>
-              <select id="fCategoria">
-                <option value="">Sin categoría</option>
-                <option value="__nueva__">＋ Nueva categoría</option>
-              </select>
-              <div id="fCatNuevaWrap" class="cat-nueva-inline hidden">
-                <input type="text" id="fCatNuevaInput" placeholder="Nombre de la categoría…" maxlength="60">
-                <button type="button" id="fCatNuevaBtn" class="btn-cat-add">Agregar</button>
-                <button type="button" id="fCatNuevaCancelar" class="btn-cat-cancel">✕</button>
-              </div>
-            </div>
-            <div class="form-group">
-              <label>Asignar a visionaria</label>
-              <select id="fVendedora">
-                <option value="">Catálogo general</option>
-                ${(vendedoras || []).map(v => `<option value="${v.id}">${v.nombre}</option>`).join('')}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- 6. Fotos de la prenda -->
+        <!-- 7. Fotos de la prenda -->
         <div class="form-section">
           <div class="form-section-title">
             Fotos de la prenda
@@ -287,7 +275,7 @@ async function renderPrendas() {
           </div>
         </div>
 
-        <!-- 7. Fotos de etiquetas -->
+        <!-- Fotos de etiquetas -->
         <div class="form-section">
           <div class="form-section-title">
             Fotos de etiquetas
@@ -307,7 +295,7 @@ async function renderPrendas() {
           </div>
         </div>
 
-        <!-- 8. Botón Generar con IA -->
+        <!-- Botón Generar con IA -->
         <div class="ia-btn-row">
           <button type="button" id="btnGenerarIA" class="btn-ia" disabled>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -318,6 +306,33 @@ async function renderPrendas() {
           <span class="ia-hint">Analiza las fotos y rellena el formulario automáticamente</span>
         </div>
 
+        <!-- 8. Marca e información general -->
+        <div class="form-section">
+          <div class="form-section-title">Información</div>
+          <div class="form-grid form-grid-2">
+            <div class="form-group">
+              <label>Nombre *</label>
+              <input type="text" id="fNombre" required placeholder="Ej: Blazer Negro Structured">
+            </div>
+            <div class="form-group">
+              <label>Marca</label>
+              <input type="text" id="fMarca" placeholder="Ej: Shein, Zara…">
+            </div>
+            <div class="form-group">
+              <label>Color</label>
+              <input type="text" id="fColor" placeholder="Ej: Negro, Rosa, Multicolor">
+            </div>
+            <div class="form-group">
+              <label>Asignar a visionaria</label>
+              <select id="fVendedora">
+                <option value="">Catálogo general</option>
+                ${(vendedoras || []).map(v => `<option value="${v.id}">${v.nombre}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 9. Descripción -->
         <div class="form-section">
           <div class="form-section-title">Descripción</div>
           <div class="form-section-subtitle">Ficha técnica</div>
@@ -642,7 +657,7 @@ async function handlePrendaSubmit(e) {
       medida_1_valor:    parseFloat(document.getElementById('fMedida1Valor').value) || null,
       medida_2_nombre:   getMedidas(document.getElementById('fCategoria').value)[1],
       medida_2_valor:    parseFloat(document.getElementById('fMedida2Valor').value) || null,
-      precio_costo:      parseFloat(document.getElementById('fPrecioVendedora').value) || 0,
+      precio_costo:      parseFloat(document.getElementById('fPrecioCosto').value)    || 0,
       precio_min:        parseFloat(document.getElementById('fPrecioMin').value)       || 0,
       precio_max:        parseFloat(document.getElementById('fPrecioMax').value)       || 0,
       disponible:        true,
