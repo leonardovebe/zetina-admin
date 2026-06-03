@@ -113,17 +113,41 @@ function navigate(section) {
 let selectedFotosPrenda   = [];
 let selectedFotosEtiqueta = [];
 
+async function loadCategorias() {
+  const { data, error } = await db
+    .from('categorias_prendas')
+    .select('id, nombre')
+    .order('nombre', { ascending: true });
+  if (error) {
+    console.error('[loadCategorias] error:', error);
+    return [];
+  }
+  return data || [];
+}
+
+function fillCategoriaSelect(cats) {
+  const sel = document.getElementById('fCategoria');
+  if (!sel) return;
+  const anchor = sel.querySelector('option[value="__nueva__"]');
+  cats.forEach(c => {
+    const opt = new Option(c.nombre, c.nombre);
+    sel.insertBefore(opt, anchor);
+  });
+  if (!cats.length) {
+    const placeholder = new Option('(sin categorías en BD)', '', false, false);
+    placeholder.disabled = true;
+    sel.insertBefore(placeholder, anchor);
+  }
+}
+
 async function renderPrendas() {
   const main = document.getElementById('sectionContent');
   main.innerHTML = '<div class="table-loading">Cargando formulario…</div>';
 
-  const [{ data: vendedoras, error: errVend }, { data: cats, error: errCats }] = await Promise.all([
-    db.from('vendedoras').select('id, nombre').order('nombre'),
-    db.from('categorias_prendas').select('id, nombre').order('nombre', { ascending: true }),
-  ]);
-  console.log('[renderPrendas] cats:', cats, '| error:', errCats);
-  console.log('[renderPrendas] vendedoras:', vendedoras, '| error:', errVend);
-  const categorias = cats || [];
+  const { data: vendedoras, error: errVend } = await db
+    .from('vendedoras').select('id, nombre').order('nombre');
+  if (errVend) console.error('[renderPrendas] vendedoras error:', errVend);
+  const categorias = [];
 
   main.innerHTML = `
     <div class="upload-form-container">
@@ -226,8 +250,6 @@ async function renderPrendas() {
               <label>Categoría</label>
               <select id="fCategoria">
                 <option value="">Sin categoría</option>
-                ${errCats ? `<option value="" disabled>⚠ Error cargando: ${errCats.message}</option>` : ''}
-                ${categorias.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('')}
                 <option value="__nueva__">＋ Nueva categoría</option>
               </select>
               <div id="fCatNuevaWrap" class="cat-nueva-inline hidden">
@@ -351,6 +373,8 @@ async function renderPrendas() {
   document.getElementById('fCategoria').addEventListener('change', e => {
     actualizarLabelesMedidas('f', e.target.value);
   });
+
+  loadCategorias().then(fillCategoriaSelect);
 }
 
 function bindCatNuevaForm(selectId, wrapId, inputId, btnAddId, btnCancelId, tableName = 'categorias_prendas') {
