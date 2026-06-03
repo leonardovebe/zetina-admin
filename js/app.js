@@ -115,10 +115,14 @@ let selectedFotosEtiqueta = [];
 
 async function renderPrendas() {
   const main = document.getElementById('sectionContent');
-  const [{ data: vendedoras }, { data: cats }] = await Promise.all([
+  main.innerHTML = '<div class="table-loading">Cargando formulario…</div>';
+
+  const [{ data: vendedoras, error: errVend }, { data: cats, error: errCats }] = await Promise.all([
     db.from('vendedoras').select('id, nombre').order('nombre'),
-    db.from('categorias_prendas').select('id, nombre').order('nombre'),
+    db.from('categorias_prendas').select('id, nombre').order('nombre', { ascending: true }),
   ]);
+  console.log('[renderPrendas] cats:', cats, '| error:', errCats);
+  console.log('[renderPrendas] vendedoras:', vendedoras, '| error:', errVend);
   const categorias = cats || [];
 
   main.innerHTML = `
@@ -222,6 +226,7 @@ async function renderPrendas() {
               <label>Categoría</label>
               <select id="fCategoria">
                 <option value="">Sin categoría</option>
+                ${errCats ? `<option value="" disabled>⚠ Error cargando: ${errCats.message}</option>` : ''}
                 ${categorias.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('')}
                 <option value="__nueva__">＋ Nueva categoría</option>
               </select>
