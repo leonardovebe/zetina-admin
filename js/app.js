@@ -144,9 +144,6 @@ async function renderPrendas() {
   const main = document.getElementById('sectionContent');
   main.innerHTML = '<div class="table-loading">Cargando formulario…</div>';
 
-  const { data: vendedoras, error: errVend } = await db
-    .from('vendedoras').select('id, nombre').order('nombre');
-  if (errVend) console.error('[renderPrendas] vendedoras error:', errVend);
   const categorias = [];
 
   main.innerHTML = `
@@ -210,53 +207,17 @@ async function renderPrendas() {
           </div>
         </div>
 
-        <!-- 5. Tallas -->
+        <!-- 5. Talla real -->
         <div class="form-section">
-          <div class="form-section-title">Tallas</div>
+          <div class="form-section-title">Talla real</div>
           <div class="form-grid form-grid-2">
             <div class="form-group">
-              <label>Talla marcada</label>
-              <input type="text" id="fTallaEtiqueta" placeholder="Ej: L, XL, 38">
-            </div>
-            <div class="form-group">
-              <label>Talla real</label>
-              <input type="text" id="fTallaReal" placeholder="Ej: M, L">
+              <input type="text" id="fTallaReal" placeholder="Ej: M, L, 38">
             </div>
           </div>
         </div>
 
-        <!-- 6. Precios -->
-        <div class="form-section">
-          <div class="form-section-title">Precios</div>
-          <div class="form-grid form-grid-2">
-            <div class="form-group">
-              <label>Precio costo</label>
-              <div class="input-prefix"><span>$</span>
-                <input type="number" id="fPrecioCosto" min="0" step="0.01" placeholder="0.00">
-              </div>
-            </div>
-            <div class="form-group">
-              <label>Precio mínimo</label>
-              <div class="input-prefix"><span>$</span>
-                <input type="number" id="fPrecioMin" min="0" step="0.01" placeholder="0.00">
-              </div>
-            </div>
-            <div class="form-group">
-              <label>Precio visionaria <span class="field-auto-hint">Auto</span></label>
-              <div class="input-prefix"><span>$</span>
-                <input type="number" id="fPrecioVendedora" min="0" step="1" placeholder="0">
-              </div>
-            </div>
-            <div class="form-group">
-              <label>Precio máximo <span class="field-auto-hint">Auto</span></label>
-              <div class="input-prefix"><span>$</span>
-                <input type="number" id="fPrecioMax" min="0" step="0.01" placeholder="0.00">
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 7. Fotos de la prenda -->
+        <!-- 6. Fotos de la prenda -->
         <div class="form-section">
           <div class="form-section-title">
             Fotos de la prenda
@@ -277,7 +238,7 @@ async function renderPrendas() {
 
         <p class="fotos-note">Puedes agregar las fotos después. La prenda aparecerá en el catálogo hasta que la actives manualmente.</p>
 
-        <!-- Fotos de etiquetas -->
+        <!-- 7. Fotos de etiquetas (solo para IA) -->
         <div class="form-section">
           <div class="form-section-title">
             Fotos de etiquetas
@@ -290,82 +251,40 @@ async function renderPrendas() {
                 <rect x="3" y="6" width="18" height="13" rx="2"/>
                 <path d="M3 10h18M8 6V4M16 6V4"/>
               </svg>
-              <p>Fotos de etiquetas con talla, composición y cuidado</p>
-              <p class="text-muted">No se guardan — solo se analizan con IA</p>
+              <p>Sube al menos una foto de etiqueta para activar la IA</p>
+              <p class="text-muted">Lee talla, composición y cuidado — no se guardan</p>
             </div>
             <div class="photo-previews" id="photoPreviewsEtiqueta"></div>
           </div>
         </div>
 
-        <!-- Botón Generar con IA -->
-        <div class="ia-btn-row">
-          <button type="button" id="btnGenerarIA" class="btn-ia" disabled>
+        <!-- 8. Botón Generar con IA (visible solo con fotos de etiqueta) -->
+        <div class="ia-btn-row hidden">
+          <button type="button" id="btnGenerarIA" class="btn-ia">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
             </svg>
             Generar con IA
           </button>
-          <span class="ia-hint">Analiza las fotos y rellena el formulario automáticamente</span>
+          <span class="ia-hint">Rellena nombre, marca, talla y descripción automáticamente</span>
         </div>
 
-        <!-- 8. Marca e información general -->
-        <div class="form-section">
-          <div class="form-section-title">Información</div>
-          <div class="form-grid form-grid-2">
-            <div class="form-group">
-              <label>Nombre *</label>
-              <input type="text" id="fNombre" required placeholder="Ej: Blazer Negro Structured">
-            </div>
-            <div class="form-group">
-              <label>Marca</label>
-              <input type="text" id="fMarca" placeholder="Ej: Shein, Zara…">
-            </div>
-            <div class="form-group">
-              <label>Color</label>
-              <input type="text" id="fColor" placeholder="Ej: Negro, Rosa, Multicolor">
-            </div>
-            <div class="form-group">
-              <label>Asignar a visionaria</label>
-              <select id="fVendedora">
-                <option value="">Catálogo general</option>
-                ${(vendedoras || []).map(v => `<option value="${v.id}">${v.nombre}</option>`).join('')}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- 9. Descripción -->
-        <div class="form-section">
-          <div class="form-section-title">Descripción</div>
-          <div class="form-section-subtitle">Ficha técnica</div>
-          <div class="form-grid form-grid-3">
-            <div class="form-group">
-              <label>Material</label>
-              <input type="text" id="fMaterial" placeholder="Ej: Algodón, Poliéster…">
-            </div>
-            <div class="form-group">
-              <label>Composición</label>
-              <input type="text" id="fComposicion" placeholder="Ej: 80% algodón, 20% poliéster">
-            </div>
-            <div class="form-group">
-              <label>Instrucciones de cuidado</label>
-              <input type="text" id="fCuidado" placeholder="Ej: Lavar a mano, no planchar">
-            </div>
-          </div>
-          <div class="form-section-subtitle">Cómo vender</div>
-          <div class="form-group">
-            <label>Por qué vale lo que cuesta</label>
-            <textarea id="fPorQueVale" rows="3" placeholder="Argumentos de valor: calidad, exclusividad, durabilidad…"></textarea>
-          </div>
-          <div class="form-group">
-            <label>Cliente ideal</label>
-            <textarea id="fClienteIdeal" rows="2" placeholder="A quién le queda perfecto esta prenda…"></textarea>
-          </div>
-          <div class="form-group">
-            <label>Cómo presentarla</label>
-            <textarea id="fComoPresentarla" rows="3" placeholder="Tips para mostrarla, con qué combinarla, cómo usarla…"></textarea>
-          </div>
-        </div>
+        <!-- Campos ocultos: los llena la IA o quedan en blanco para editar en Inventario -->
+        <input type="hidden" id="fNombre" value="">
+        <input type="hidden" id="fMarca" value="">
+        <input type="hidden" id="fColor" value="">
+        <input type="hidden" id="fTallaEtiqueta" value="">
+        <input type="hidden" id="fVendedora" value="">
+        <input type="hidden" id="fPrecioCosto" value="0">
+        <input type="hidden" id="fPrecioMin" value="0">
+        <input type="hidden" id="fPrecioVendedora" value="0">
+        <input type="hidden" id="fPrecioMax" value="0">
+        <input type="hidden" id="fMaterial" value="">
+        <input type="hidden" id="fComposicion" value="">
+        <input type="hidden" id="fCuidado" value="">
+        <input type="hidden" id="fPorQueVale" value="">
+        <input type="hidden" id="fClienteIdeal" value="">
+        <input type="hidden" id="fComoPresentarla" value="">
 
         <div class="form-actions">
           <button type="submit" class="btn btn-primary" id="submitPrendaBtn">
@@ -384,8 +303,6 @@ async function renderPrendas() {
   bindPhotoSection('photoAreaEtiqueta', 'fotosInputEtiqueta', 'photoPreviewsEtiqueta', selectedFotosEtiqueta, renderEtiquetaPreviews);
   document.getElementById('btnGenerarIA').addEventListener('click', handleGenerarIA);
   document.getElementById('prendaForm').addEventListener('submit', handlePrendaSubmit);
-  document.getElementById('fPrecioMin').addEventListener('input', calcularPreciosAuto);
-  document.getElementById('fId').addEventListener('input', calcularPreciosAuto);
   bindCatNuevaForm('fCategoria', 'fCatNuevaWrap', 'fCatNuevaInput', 'fCatNuevaBtn', 'fCatNuevaCancelar');
   document.getElementById('fCategoria').addEventListener('change', e => {
     actualizarLabelesMedidas('f', e.target.value);
@@ -517,9 +434,8 @@ function renderEtiquetaPreviews() { _renderPhotoArea(selectedFotosEtiqueta, 'pho
 function updateIAButton() {
   const btn = document.getElementById('btnGenerarIA');
   if (!btn) return;
-  const hasPhotos = selectedFotosPrenda.length > 0 || selectedFotosEtiqueta.length > 0;
   const row = btn.closest('.ia-btn-row');
-  if (row) row.classList.toggle('hidden', !hasPhotos);
+  if (row) row.classList.toggle('hidden', selectedFotosEtiqueta.length === 0);
   btn.disabled = btn.classList.contains('loading');
 }
 
@@ -650,7 +566,7 @@ async function handlePrendaSubmit(e) {
     };
     const prendaData = {
       numero:            document.getElementById('fId').value.trim(),
-      nombre:            document.getElementById('fNombre').value.trim(),
+      nombre:            document.getElementById('fNombre').value.trim() || document.getElementById('fId').value.trim(),
       marca:             document.getElementById('fMarca').value.trim()        || null,
       color:             document.getElementById('fColor').value.trim()        || null,
       categoria:         document.getElementById('fCategoria').value           || null,
