@@ -713,6 +713,7 @@ async function handlePrendaSubmit(e) {
       medida_2_valor:    parseFloat(document.getElementById('fMedida2Valor').value) || null,
       precio_costo:      parseFloat(document.getElementById('fPrecioCosto').value)     || 0,
       precio_min:        parseFloat(document.getElementById('fPrecioMin').value)     || 0,
+      precio_vendedora:  parseFloat(document.getElementById('fPrecioVendedora').value) || 0,
       precio_max:        parseFloat(document.getElementById('fPrecioMax').value)     || 0,
       disponible:        false,
       baja:              false,
