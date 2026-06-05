@@ -400,12 +400,6 @@ async function renderPrendas() {
 
   loadCategorias().then(fillCategoriaSelect);
   updateIAButton();
-
-  // Listeners de precio al final, garantizando que el DOM esté listo
-  setTimeout(() => {
-    document.getElementById('fPrecioMin')?.addEventListener('input', calcularPreciosAuto);
-    document.getElementById('fNumero')?.addEventListener('input', calcularPreciosAuto);
-  }, 0);
 }
 
 function bindCatNuevaForm(selectId, wrapId, inputId, btnAddId, btnCancelId, tableName = 'categorias_prendas') {
@@ -3021,6 +3015,12 @@ async function initPedidosRealtime() {
 // ══════════════════════════════════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════════════════════════════════
+document.addEventListener('input', function(e) {
+  if (e.target.id === 'fPrecioMin' || e.target.id === 'fNumero') {
+    calcularPreciosAuto();
+  }
+});
+
 document.addEventListener('DOMContentLoaded', () => {
   checkAuth();
   initPedidosRealtime();
