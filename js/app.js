@@ -240,7 +240,7 @@ async function renderPrendas() {
               <label>Precio máximo <span class="label-auto">auto</span></label>
               <div class="input-prefix">
                 <span>$</span>
-                <input type="number" id="fPrecioMax" min="0" step="0.01" placeholder="—" tabindex="-1" readonly>
+                <input type="number" id="fPrecioMax" min="0" step="1" placeholder="—" tabindex="-1" readonly>
               </div>
             </div>
           </div>
