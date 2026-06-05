@@ -462,16 +462,31 @@ function bindCatNuevaForm(selectId, wrapId, inputId, btnAddId, btnCancelId, tabl
   });
 }
 
+function _aplicarPreciosAuto(min, prefijo, vendEl, maxEl) {
+  if (min > 0) {
+    vendEl.value = Math.ceil(min * 0.70 / 10) * 10;
+  } else {
+    vendEl.value = '';
+  }
+  const mult = { SAL: 1.10, RAC: 1.25, JOY: 1.40, INT: 1.40 }[prefijo];
+  maxEl.value = (mult && min > 0) ? Math.round(min * mult) : '';
+}
+
 function calcularPreciosAuto() {
-  const idVal    = (document.getElementById('fId').value.trim()).toUpperCase();
-  const precioMin = parseFloat(document.getElementById('fPrecioMin').value) || 0;
-  if (precioMin <= 0) return;
+  const prefijo  = (document.getElementById('fId').value.trim()).toUpperCase().slice(0, 3);
+  const min      = parseFloat(document.getElementById('fPrecioMin').value) || 0;
+  _aplicarPreciosAuto(min, prefijo,
+    document.getElementById('fPrecioVendedora'),
+    document.getElementById('fPrecioMax'));
+}
 
-  document.getElementById('fPrecioVendedora').value = Math.ceil(precioMin * 0.70 / 10) * 10;
-
-  const prefix = idVal.slice(0, 3);
-  const mult = { SAL: 1.10, RAC: 1.25, JOY: 1.40, INT: 1.40 }[prefix];
-  if (mult) document.getElementById('fPrecioMax').value = (precioMin * mult).toFixed(2);
+function _calcularPreciosModal() {
+  const prefijo = (document.getElementById('eId')?.value.trim() || '').toUpperCase().slice(0, 3);
+  const min     = parseFloat(document.getElementById('ePrecioMin')?.value) || 0;
+  const vendEl  = document.getElementById('eCosto');
+  const maxEl   = document.getElementById('ePrecioMax');
+  if (!vendEl || !maxEl) return;
+  _aplicarPreciosAuto(min, prefijo, vendEl, maxEl);
 }
 
 function bindPhotoSection(areaId, inputId, previewsId, store, renderFn) {
@@ -681,9 +696,9 @@ async function handlePrendaSubmit(e) {
       medida_1_valor:    parseFloat(document.getElementById('fMedida1Valor').value) || null,
       medida_2_nombre:   getMedidas(cat)[1],
       medida_2_valor:    parseFloat(document.getElementById('fMedida2Valor').value) || null,
-      precio_costo:      parseFloat(document.getElementById('fPrecioCosto').value)  || 0,
-      precio_min:        parseFloat(document.getElementById('fPrecioMin').value)    || 0,
-      precio_max:        parseFloat(document.getElementById('fPrecioMax').value)    || 0,
+      precio_costo:      parseFloat(document.getElementById('fPrecioVendedora').value) || 0,
+      precio_min:        parseFloat(document.getElementById('fPrecioMin').value)     || 0,
+      precio_max:        parseFloat(document.getElementById('fPrecioMax').value)     || 0,
       disponible:        false,
       baja:              false,
       fecha_adquisicion: new Date().toISOString(),
@@ -1071,24 +1086,25 @@ async function abrirEditarPrenda(id) {
         <div class="form-section-title">Precios</div>
         <div class="form-grid form-grid-3">
           <div class="form-group">
-            <label>Precio visionaria</label>
-            <div class="input-prefix"><span>$</span>
-              <input type="number" id="eCosto" min="0" step="1" value="${p.precio_costo || ''}">
-            </div>
-          </div>
-          <div class="form-group">
             <label>Precio mínimo</label>
             <div class="input-prefix"><span>$</span>
-              <input type="number" id="ePrecioMin" min="0" step="0.01" value="${p.precio_min || ''}">
+              <input type="number" id="ePrecioMin" min="0" step="1" value="${p.precio_min || ''}">
             </div>
           </div>
-          <div class="form-group">
-            <label>Precio máximo</label>
+          <div class="form-group price-readonly">
+            <label>Precio visionaria <span class="label-auto">auto 70%</span></label>
             <div class="input-prefix"><span>$</span>
-              <input type="number" id="ePrecioMax" min="0" step="0.01" value="${p.precio_max || ''}">
+              <input type="number" id="eCosto" min="0" step="1" value="${p.precio_costo || ''}" tabindex="-1" readonly>
+            </div>
+          </div>
+          <div class="form-group price-readonly">
+            <label>Precio máximo <span class="label-auto">auto</span></label>
+            <div class="input-prefix"><span>$</span>
+              <input type="number" id="ePrecioMax" min="0" step="1" value="${p.precio_max || ''}" tabindex="-1" readonly>
             </div>
           </div>
         </div>
+        <p class="precios-note">Precio visionaria = 70% del mínimo. Máximo: SAL ×1.10 · RAC ×1.25 · JOY/INT ×1.40</p>
       </div>
 
       <div class="edit-section">
@@ -1161,6 +1177,10 @@ async function abrirEditarPrenda(id) {
     e.preventDefault();
     guardarEditPrenda(id, hasExtras);
   });
+
+  // Auto-cálculo de precios en tiempo real
+  document.getElementById('ePrecioMin')?.addEventListener('input', _calcularPreciosModal);
+  if (hasExtras) document.getElementById('eId')?.addEventListener('input', _calcularPreciosModal);
 }
 
 function _renderEditFotos() {
