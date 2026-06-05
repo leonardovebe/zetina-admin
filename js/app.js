@@ -396,6 +396,7 @@ async function renderPrendas() {
   const recalcular = () => calcularPreciosAuto();
   document.getElementById('fPrecioMin').addEventListener('input', recalcular);
   document.getElementById('fId').addEventListener('input', recalcular);
+  console.log('[precios] listeners registrados — fPrecioMin:', !!document.getElementById('fPrecioMin'), '| fId:', !!document.getElementById('fId'));
 
   // Continuar sin IA → mostrar sección de campos directamente
   document.getElementById('btnSinIA').addEventListener('click', () => {
@@ -463,29 +464,39 @@ function bindCatNuevaForm(selectId, wrapId, inputId, btnAddId, btnCancelId, tabl
 }
 
 function _aplicarPreciosAuto(min, prefijo, vendEl, maxEl) {
-  if (min > 0) {
-    vendEl.value = Math.ceil(min * 0.70 / 10) * 10;
-  } else {
-    vendEl.value = '';
-  }
-  const mult = { SAL: 1.10, RAC: 1.25, JOY: 1.40, INT: 1.40 }[prefijo];
-  maxEl.value = (mult && min > 0) ? Math.round(min * mult) : '';
+  const mult     = { SAL: 1.10, RAC: 1.25, JOY: 1.40, INT: 1.40 }[prefijo];
+  const vend     = min > 0 ? Math.ceil(min * 0.70 / 10) * 10 : '';
+  const precioMax = (mult && min > 0) ? Math.round(min * mult) : '';
+
+  vendEl.value = vend;
+  maxEl.value  = precioMax;
+
+  console.log('[precios] prefijo:', prefijo, '| precio_min:', min, '| mult:', mult ?? 'sin prefijo', '| visionaria:', vend, '| precio_max:', precioMax);
 }
 
 function calcularPreciosAuto() {
-  const prefijo  = (document.getElementById('fId').value.trim()).toUpperCase().slice(0, 3);
-  const min      = parseFloat(document.getElementById('fPrecioMin').value) || 0;
-  _aplicarPreciosAuto(min, prefijo,
-    document.getElementById('fPrecioVendedora'),
-    document.getElementById('fPrecioMax'));
+  const idRaw   = document.getElementById('fId')?.value ?? '';
+  const prefijo = idRaw.trim().toUpperCase().slice(0, 3);
+  const min     = parseFloat(document.getElementById('fPrecioMin')?.value) || 0;
+  const vendEl  = document.getElementById('fPrecioVendedora');
+  const maxEl   = document.getElementById('fPrecioMax');
+
+  console.log('[precios] calcularPreciosAuto — fId raw:', JSON.stringify(idRaw), '| fPrecioMin el:', !!document.getElementById('fPrecioMin'), '| fPrecioVendedora el:', !!vendEl, '| fPrecioMax el:', !!maxEl);
+
+  if (!vendEl || !maxEl) { console.warn('[precios] elementos no encontrados en el DOM'); return; }
+  _aplicarPreciosAuto(min, prefijo, vendEl, maxEl);
 }
 
 function _calcularPreciosModal() {
-  const prefijo = (document.getElementById('eId')?.value.trim() || '').toUpperCase().slice(0, 3);
+  const idRaw   = document.getElementById('eId')?.value ?? '';
+  const prefijo = idRaw.trim().toUpperCase().slice(0, 3);
   const min     = parseFloat(document.getElementById('ePrecioMin')?.value) || 0;
   const vendEl  = document.getElementById('eCosto');
   const maxEl   = document.getElementById('ePrecioMax');
-  if (!vendEl || !maxEl) return;
+
+  console.log('[precios] _calcularPreciosModal — eId raw:', JSON.stringify(idRaw), '| ePrecioMin el:', !!document.getElementById('ePrecioMin'), '| eCosto el:', !!vendEl, '| ePrecioMax el:', !!maxEl);
+
+  if (!vendEl || !maxEl) { console.warn('[precios] elementos modal no encontrados'); return; }
   _aplicarPreciosAuto(min, prefijo, vendEl, maxEl);
 }
 
