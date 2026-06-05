@@ -115,20 +115,18 @@ function navigate(section) {
 // ══════════════════════════════════════════════════════════════════════════════
 let selectedFotosPrenda   = [];
 let selectedFotosEtiqueta = [];
-let _dragSrcIdx = null;
-
 function _bindPhotoDrag(container, store, renderFn) {
   container.querySelectorAll('[draggable="true"]').forEach((item, i) => {
     item.addEventListener('dragstart', e => {
-      _dragSrcIdx = i;
-      item.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', String(i));
       e.dataTransfer.effectAllowed = 'move';
+      // setTimeout so the 'dragging' class appears after the browser captures the drag image
+      setTimeout(() => item.classList.add('dragging'), 0);
     });
     item.addEventListener('dragend', () => {
-      _dragSrcIdx = null;
-      container.querySelectorAll('.dragging, .drag-over').forEach(el => {
-        el.classList.remove('dragging', 'drag-over');
-      });
+      container.querySelectorAll('.dragging, .drag-over').forEach(el =>
+        el.classList.remove('dragging', 'drag-over')
+      );
     });
     item.addEventListener('dragover', e => {
       e.preventDefault();
@@ -139,8 +137,10 @@ function _bindPhotoDrag(container, store, renderFn) {
     item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
     item.addEventListener('drop', e => {
       e.preventDefault();
-      if (_dragSrcIdx === null || _dragSrcIdx === i) return;
-      const moved = store.splice(_dragSrcIdx, 1)[0];
+      e.stopPropagation(); // prevent parent area's drop handler from firing
+      const from = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      if (isNaN(from) || from === i) return;
+      const moved = store.splice(from, 1)[0];
       store.splice(i, 0, moved);
       renderFn();
     });
@@ -1277,12 +1277,11 @@ function _renderEditFotos() {
   const draggableItems = [...grid.querySelectorAll('.edit-foto-item[draggable="true"]')];
   draggableItems.forEach((item, dragPos) => {
     item.addEventListener('dragstart', e => {
-      _dragSrcIdx = dragPos;
-      item.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', String(dragPos));
       e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => item.classList.add('dragging'), 0);
     });
     item.addEventListener('dragend', () => {
-      _dragSrcIdx = null;
       grid.querySelectorAll('.dragging, .drag-over').forEach(el => el.classList.remove('dragging', 'drag-over'));
     });
     item.addEventListener('dragover', e => {
@@ -1294,9 +1293,10 @@ function _renderEditFotos() {
     item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
     item.addEventListener('drop', e => {
       e.preventDefault();
-      if (_dragSrcIdx === null || _dragSrcIdx === dragPos) return;
-      // Reorder within _editFotosExistentes using the original indices stored in data-exist-i
-      const srcOrigIdx  = +draggableItems[_dragSrcIdx].dataset.existI;
+      e.stopPropagation();
+      const fromDragPos = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      if (isNaN(fromDragPos) || fromDragPos === dragPos) return;
+      const srcOrigIdx  = +draggableItems[fromDragPos].dataset.existI;
       const destOrigIdx = +item.dataset.existI;
       const moved = _editFotosExistentes.splice(srcOrigIdx, 1)[0];
       _editFotosExistentes.splice(destOrigIdx, 0, moved);
