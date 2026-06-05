@@ -218,12 +218,12 @@ async function renderPrendas() {
           </div>
         </div>
 
-        <!-- 6. Costo -->
+        <!-- 6. Costo ZETINA -->
         <div class="form-section">
-          <div class="form-section-title">Costo</div>
+          <div class="form-section-title">Costo ZETINA</div>
           <div class="form-grid form-grid-2">
             <div class="form-group">
-              <label>Costo de la prenda *</label>
+              <label>Costo ZETINA *</label>
               <div class="input-prefix">
                 <span>$</span>
                 <input type="number" id="fPrecioCosto" min="0" step="1" placeholder="0" required>
@@ -244,7 +244,7 @@ async function renderPrendas() {
               </div>
             </div>
             <div class="form-group price-readonly">
-              <label>Precio visionaria <span class="label-auto">auto 70%</span></label>
+              <label>Precio Visionaria <span class="label-auto">auto 70%</span></label>
               <div class="input-prefix">
                 <span>$</span>
                 <input type="number" id="fPrecioVendedora" min="0" step="1" placeholder="—" tabindex="-1" readonly>
@@ -258,7 +258,7 @@ async function renderPrendas() {
               </div>
             </div>
           </div>
-          <p class="precios-note">Precio visionaria = 70% del mínimo. Máximo: SAL ×1.10 · RAC ×1.25 · JOY/INT ×1.40</p>
+          <p class="precios-note">Precio Visionaria = 70% del mínimo. Máximo: SAL ×1.10 · RAC ×1.25 · JOY/INT ×1.40</p>
         </div>
 
         <!-- 10. Fotos de la prenda -->
@@ -503,10 +503,10 @@ function calcularPreciosAuto() {
 }
 
 function _calcularPreciosModal() {
-  const prefijo  = document.getElementById('eId')?.value?.trim().toUpperCase().substring(0, 3) ?? '';
+  const prefijo   = document.getElementById('eId')?.value?.trim().toUpperCase().substring(0, 3) ?? '';
   const precioMin = parseFloat(document.getElementById('ePrecioMin')?.value) || 0;
-  const vendEl   = document.getElementById('eCosto');
-  const maxEl    = document.getElementById('ePrecioMax');
+  const vendEl    = document.getElementById('ePrecioVendedora');
+  const maxEl     = document.getElementById('ePrecioMax');
   if (!vendEl || !maxEl) return;
   _aplicarPreciosAuto(precioMin, prefijo, vendEl, maxEl);
 }
@@ -829,7 +829,7 @@ async function loadInventario() {
     });
 
     let q = db.from('prendas')
-      .select('id, numero, nombre, marca, categoria, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, precio_costo, precio_min, precio_max, disponible, baja, emoji, fecha_adquisicion, vendedoras(nombre), fotos_prendas(url)')
+      .select('id, numero, nombre, marca, categoria, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, emoji, fecha_adquisicion, vendedoras(nombre), fotos_prendas(url)')
       .order('created_at', { ascending: false });
 
     if (_invFilter === 'disponible') q = q.eq('disponible', true).eq('baja', false);
@@ -866,7 +866,7 @@ async function loadInventario() {
         <table class="data-table">
           <thead><tr>
             <th>Foto</th><th>ID</th><th>Nombre</th><th>Marca</th>
-            <th>Categoría</th><th>Talla</th><th>Costo</th>
+            <th>Categoría</th><th>Talla</th><th>Costo ZETINA</th><th>P. Visionaria</th>
             <th>Min / Max</th><th>Visionaria</th><th>Estado</th><th>Medidas</th><th>Adquirida</th><th>Vendida</th><th>Acciones</th>
           </tr></thead>
           <tbody>
@@ -882,6 +882,7 @@ async function loadInventario() {
                 <td>${p.categoria || '—'}</td>
                 <td>${p.talla_etiqueta || '—'}</td>
                 <td>${formatPeso(p.precio_costo)}</td>
+                <td>${formatPeso(p.precio_vendedora)}</td>
                 <td class="td-precios">${formatPeso(p.precio_min)} – ${formatPeso(p.precio_max)}</td>
                 <td>${p.vendedoras?.nombre || '<span class="text-muted">Catálogo</span>'}</td>
                 <td>${estadoBadge(p)}</td>
@@ -983,8 +984,8 @@ async function abrirEditarPrenda(id) {
 
   // Try fetching with optional columns (numero, categoria); fall back if they don't exist yet
   let p, hasExtras = true;
-  const fullSel = 'id, nombre, marca, color, categoria, departamento, numero, emoji, gradiente, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
-  const safeSel = 'id, nombre, marca, color, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
+  const fullSel = 'id, nombre, marca, color, categoria, departamento, numero, emoji, gradiente, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
+  const safeSel = 'id, nombre, marca, color, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
 
   let { data, error } = await db.from('prendas').select(fullSel).eq('id', id).single();
   if (error && error.message.includes('does not exist')) {
@@ -1099,17 +1100,23 @@ async function abrirEditarPrenda(id) {
 
       <div class="edit-section">
         <div class="form-section-title">Precios</div>
-        <div class="form-grid form-grid-3">
+        <div class="form-grid form-grid-2">
           <div class="form-group">
             <label>Precio mínimo</label>
             <div class="input-prefix"><span>$</span>
               <input type="number" id="ePrecioMin" min="0" step="1" value="${p.precio_min || ''}">
             </div>
           </div>
-          <div class="form-group price-readonly">
-            <label>Precio visionaria <span class="label-auto">auto 70%</span></label>
+          <div class="form-group">
+            <label>Costo ZETINA</label>
             <div class="input-prefix"><span>$</span>
-              <input type="number" id="eCosto" min="0" step="1" value="${p.precio_costo || ''}" tabindex="-1" readonly>
+              <input type="number" id="eCosto" min="0" step="1" value="${p.precio_costo || ''}">
+            </div>
+          </div>
+          <div class="form-group price-readonly">
+            <label>Precio Visionaria <span class="label-auto">auto 70%</span></label>
+            <div class="input-prefix"><span>$</span>
+              <input type="number" id="ePrecioVendedora" min="0" step="1" value="${p.precio_vendedora || ''}" tabindex="-1" readonly>
             </div>
           </div>
           <div class="form-group price-readonly">
@@ -1119,7 +1126,7 @@ async function abrirEditarPrenda(id) {
             </div>
           </div>
         </div>
-        <p class="precios-note">Precio visionaria = 70% del mínimo. Máximo: SAL ×1.10 · RAC ×1.25 · JOY/INT ×1.40</p>
+        <p class="precios-note">Precio Visionaria = 70% del mínimo. Máximo: SAL ×1.10 · RAC ×1.25 · JOY/INT ×1.40</p>
       </div>
 
       <div class="edit-section">
@@ -1261,9 +1268,10 @@ async function guardarEditPrenda(id, hasExtras) {
       medida_1_valor:  parseFloat(document.getElementById('eMedida1Valor')?.value) || null,
       medida_2_nombre: (document.getElementById('eMedida2Label')?.textContent || '').replace(' (cm)', '') || null,
       medida_2_valor:  parseFloat(document.getElementById('eMedida2Valor')?.value) || null,
-      precio_costo:   parseFloat(document.getElementById('eCosto').value)    || 0,
-      precio_min:     parseFloat(document.getElementById('ePrecioMin').value) || 0,
-      precio_max:     parseFloat(document.getElementById('ePrecioMax').value) || 0,
+      precio_costo:     parseFloat(document.getElementById('eCosto').value)          || 0,
+      precio_min:       parseFloat(document.getElementById('ePrecioMin').value)      || 0,
+      precio_vendedora: parseFloat(document.getElementById('ePrecioVendedora').value) || 0,
+      precio_max:       parseFloat(document.getElementById('ePrecioMax').value)      || 0,
       disponible:     estadoVal === 'disponible',
       baja:           estadoVal === 'baja',
       descripcion:    Object.values(_eDesc).some(Boolean) ? JSON.stringify(_eDesc) : null,
