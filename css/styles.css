@@ -927,6 +927,69 @@ img { max-width: 100%; display: block; }
   color: var(--text-muted);
 }
 
+.skip-ia-link {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+}
+.skip-ia-link:hover { color: var(--purple); }
+
+.label-auto {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--purple);
+  background: var(--accent-dim);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.precios-note, .field-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+.ia-results-section {
+  border-top: 2px solid var(--purple);
+  margin-top: 8px;
+  padding-top: 4px;
+  animation: fadeSlideIn 0.3s ease;
+}
+
+.ia-results-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--purple);
+  padding: 14px 0 4px;
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.price-readonly input[type="number"] {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
 .field-auto-hint {
   display: inline-block;
   font-size: 0.65rem;

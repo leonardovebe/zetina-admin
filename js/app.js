@@ -147,8 +147,6 @@ async function renderPrendas() {
   const main = document.getElementById('sectionContent');
   main.innerHTML = '<div class="table-loading">Cargando formulario…</div>';
 
-  const categorias = [];
-
   main.innerHTML = `
     <div class="upload-form-container">
       <form id="prendaForm" class="prenda-form">
@@ -220,7 +218,36 @@ async function renderPrendas() {
           </div>
         </div>
 
-        <!-- 6. Fotos de la prenda -->
+        <!-- 6. Precio mínimo con cálculo automático -->
+        <div class="form-section">
+          <div class="form-section-title">Precio</div>
+          <div class="form-grid form-grid-3">
+            <div class="form-group">
+              <label>Precio mínimo *</label>
+              <div class="input-prefix">
+                <span>$</span>
+                <input type="number" id="fPrecioMin" min="0" step="1" placeholder="0" required>
+              </div>
+            </div>
+            <div class="form-group price-readonly">
+              <label>Precio visionaria <span class="label-auto">auto 70%</span></label>
+              <div class="input-prefix">
+                <span>$</span>
+                <input type="number" id="fPrecioVendedora" min="0" step="1" placeholder="—" tabindex="-1" readonly>
+              </div>
+            </div>
+            <div class="form-group price-readonly">
+              <label>Precio máximo <span class="label-auto">auto</span></label>
+              <div class="input-prefix">
+                <span>$</span>
+                <input type="number" id="fPrecioMax" min="0" step="0.01" placeholder="—" tabindex="-1" readonly>
+              </div>
+            </div>
+          </div>
+          <p class="precios-note">Precio visionaria = 70% del mínimo. Máximo: SAL ×1.10 · RAC ×1.25 · JOY/INT ×1.40</p>
+        </div>
+
+        <!-- 7. Fotos de la prenda -->
         <div class="form-section">
           <div class="form-section-title">
             Fotos de la prenda
@@ -241,7 +268,7 @@ async function renderPrendas() {
 
         <p class="fotos-note">Puedes agregar las fotos después. La prenda aparecerá en el catálogo hasta que la actives manualmente.</p>
 
-        <!-- 7. Fotos de etiquetas (solo para IA) -->
+        <!-- 8. Fotos de etiquetas (solo para IA) -->
         <div class="form-section">
           <div class="form-section-title">
             Fotos de etiquetas
@@ -261,18 +288,17 @@ async function renderPrendas() {
           </div>
         </div>
 
-        <!-- 8. Observaciones para la IA -->
+        <!-- 9. Observaciones -->
         <div class="form-section">
           <div class="form-section-title">Observaciones</div>
           <div class="form-group">
-            <textarea id="fObservaciones" rows="3"
-              placeholder="Agrega notas sobre la prenda que ayuden a la IA a generar una mejor descripción. Ej: la tela es muy suave, el corte es generoso, ideal para ocasiones formales…"
-              style="resize:vertical"></textarea>
+            <textarea id="fObservaciones" rows="3" style="resize:vertical"
+              placeholder="Agrega notas sobre la prenda que ayuden a la IA a generar una mejor descripción. Ej: la tela es muy suave, el corte es generoso, ideal para ocasiones formales…"></textarea>
           </div>
         </div>
 
-        <!-- 9. Botón Generar con IA (visible solo con fotos de etiqueta) -->
-        <div class="ia-btn-row hidden">
+        <!-- 10. Botón Generar con IA -->
+        <div class="ia-btn-row hidden" id="iaBtnRow">
           <button type="button" id="btnGenerarIA" class="btn-ia">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
@@ -281,32 +307,76 @@ async function renderPrendas() {
           </button>
           <span class="ia-hint">Rellena nombre, marca, talla y descripción automáticamente</span>
         </div>
+        <button type="button" id="btnSinIA" class="skip-ia-link">Continuar sin IA →</button>
 
-        <!-- Campos ocultos: los llena la IA o quedan en blanco para editar en Inventario -->
-        <input type="hidden" id="fNombre" value="">
-        <input type="hidden" id="fMarca" value="">
+        <!-- ══ CAMPOS GENERADOS POR IA (ocultos hasta correr IA o "Continuar sin IA") ══ -->
+        <div id="iaResultsSection" class="ia-results-section hidden">
+
+          <div class="ia-results-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;flex-shrink:0">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+            </svg>
+            Revisa y edita antes de guardar
+          </div>
+
+          <!-- 11. Nombre -->
+          <div class="form-section">
+            <div class="form-section-title">Nombre de la prenda *</div>
+            <div class="form-group">
+              <input type="text" id="fNombre" placeholder="Máx 5 palabras incluyendo marca" maxlength="120">
+              <p class="field-hint">Ej: "Blazer Structured Negro Theory" — máx 5 palabras, tono boutique</p>
+            </div>
+          </div>
+
+          <!-- 12. Marca -->
+          <div class="form-section">
+            <div class="form-section-title">Marca</div>
+            <div class="form-grid form-grid-2">
+              <div class="form-group">
+                <input type="text" id="fMarca" placeholder="Marca de la prenda">
+              </div>
+            </div>
+          </div>
+
+          <!-- 13. Talla marcada -->
+          <div class="form-section">
+            <div class="form-section-title">Talla marcada</div>
+            <div class="form-grid form-grid-2">
+              <div class="form-group">
+                <input type="text" id="fTallaEtiqueta" placeholder="Talla exacta de la etiqueta">
+              </div>
+            </div>
+          </div>
+
+          <!-- 14. Descripción completa -->
+          <div class="form-section">
+            <div class="form-section-title">Descripción completa</div>
+            <div class="form-group">
+              <textarea id="fDescripcion" rows="8" style="resize:vertical"
+                placeholder="La IA llenará este campo con argumentos de venta, cliente ideal y cómo presentarla…"></textarea>
+            </div>
+          </div>
+
+          <!-- 15. Guardar -->
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="submitPrendaBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px;flex-shrink:0">
+                <path d="M5 12l5 5L20 7"/>
+              </svg>
+              Guardar prenda
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Campos técnicos ocultos (llenados por IA) -->
         <input type="hidden" id="fColor" value="">
-        <input type="hidden" id="fTallaEtiqueta" value="">
         <input type="hidden" id="fVendedora" value="">
         <input type="hidden" id="fPrecioCosto" value="0">
-        <input type="hidden" id="fPrecioMin" value="0">
-        <input type="hidden" id="fPrecioVendedora" value="0">
-        <input type="hidden" id="fPrecioMax" value="0">
         <input type="hidden" id="fMaterial" value="">
         <input type="hidden" id="fComposicion" value="">
         <input type="hidden" id="fCuidado" value="">
-        <input type="hidden" id="fPorQueVale" value="">
-        <input type="hidden" id="fClienteIdeal" value="">
-        <input type="hidden" id="fComoPresentarla" value="">
 
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary" id="submitPrendaBtn">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M12 5v14M5 12l7 7 7-7"/>
-            </svg>
-            Guardar prenda
-          </button>
-        </div>
       </form>
     </div>`;
 
@@ -317,8 +387,20 @@ async function renderPrendas() {
   document.getElementById('btnGenerarIA').addEventListener('click', handleGenerarIA);
   document.getElementById('prendaForm').addEventListener('submit', handlePrendaSubmit);
   bindCatNuevaForm('fCategoria', 'fCatNuevaWrap', 'fCatNuevaInput', 'fCatNuevaBtn', 'fCatNuevaCancelar');
+
   document.getElementById('fCategoria').addEventListener('change', e => {
     actualizarLabelesMedidas('f', e.target.value);
+  });
+
+  // Cálculo automático de precios en tiempo real
+  const recalcular = () => calcularPreciosAuto();
+  document.getElementById('fPrecioMin').addEventListener('input', recalcular);
+  document.getElementById('fId').addEventListener('input', recalcular);
+
+  // Continuar sin IA → mostrar sección de campos directamente
+  document.getElementById('btnSinIA').addEventListener('click', () => {
+    document.getElementById('iaResultsSection').classList.remove('hidden');
+    document.getElementById('iaResultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
   loadCategorias().then(fillCategoriaSelect);
@@ -504,12 +586,11 @@ async function handleGenerarIA() {
     const prefix = idVal.slice(0, 3);
     const categoriaLabels = { SAL: 'Saldo', RAC: 'Ropa alta calidad', JOY: 'Joyería/Accesorios', INT: 'Ropa interior' };
     const contexto = {
-      categoria:      categoriaLabels[prefix] || null,
-      tallaEtiqueta:  document.getElementById('fTallaEtiqueta').value.trim()  || null,
-      tallaReal:      document.getElementById('fTallaReal').value.trim()      || null,
-      precioMin:      parseFloat(document.getElementById('fPrecioMin').value)   || null,
-      precioMax:      parseFloat(document.getElementById('fPrecioMax').value)   || null,
-      observaciones:  document.getElementById('fObservaciones')?.value.trim()  || null,
+      categoria:     categoriaLabels[prefix] || null,
+      tallaReal:     document.getElementById('fTallaReal').value.trim()     || null,
+      precioMin:     parseFloat(document.getElementById('fPrecioMin').value)  || null,
+      precioMax:     parseFloat(document.getElementById('fPrecioMax').value)  || null,
+      observaciones: document.getElementById('fObservaciones')?.value.trim() || null,
     };
 
     const res = await fetch('/api/generar-descripcion', {
@@ -525,16 +606,25 @@ async function handleGenerarIA() {
 
     const r = await res.json();
 
-    if (r.nombre)              document.getElementById('fNombre').value        = r.nombre;
-    if (r.marca)               document.getElementById('fMarca').value         = r.marca;
-    if (r.color)               document.getElementById('fColor').value         = r.color;
-    if (r.talla)               document.getElementById('fTallaEtiqueta').value = r.talla;
-    if (r.material)            document.getElementById('fMaterial').value      = r.material;
-    if (r.composicion)         document.getElementById('fComposicion').value   = r.composicion;
-    if (r.cuidado)             document.getElementById('fCuidado').value       = r.cuidado;
-    if (r.por_que_vale)       document.getElementById('fPorQueVale').value      = r.por_que_vale;
-    if (r.cliente_ideal)      document.getElementById('fClienteIdeal').value   = r.cliente_ideal;
-    if (r.como_presentarla)   document.getElementById('fComoPresentarla').value = r.como_presentarla;
+    // Campos visibles editables
+    if (r.nombre)  document.getElementById('fNombre').value       = r.nombre;
+    if (r.marca)   document.getElementById('fMarca').value        = r.marca;
+    if (r.talla)   document.getElementById('fTallaEtiqueta').value = r.talla;
+
+    // Descripción completa: combinar los campos de ventas en un solo textarea
+    const partes = [r.por_que_vale, r.cliente_ideal, r.como_presentarla].filter(Boolean);
+    if (partes.length) document.getElementById('fDescripcion').value = partes.join('\n\n');
+
+    // Campos técnicos ocultos
+    if (r.color)       document.getElementById('fColor').value       = r.color;
+    if (r.material)    document.getElementById('fMaterial').value    = r.material;
+    if (r.composicion) document.getElementById('fComposicion').value = r.composicion;
+    if (r.cuidado)     document.getElementById('fCuidado').value     = r.cuidado;
+
+    // Mostrar sección de resultados
+    const seccion = document.getElementById('iaResultsSection');
+    seccion.classList.remove('hidden');
+    seccion.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     showToast('¡Campos llenados con IA! Revisa y edita antes de guardar.', 'success');
   } catch (err) {
@@ -571,35 +661,34 @@ async function handlePrendaSubmit(e) {
 
   try {
     const _desc = {
-      material:         document.getElementById('fMaterial').value.trim()        || null,
-      composicion:      document.getElementById('fComposicion').value.trim()     || null,
-      cuidado:          document.getElementById('fCuidado').value.trim()         || null,
-      por_que_vale:     document.getElementById('fPorQueVale').value.trim()      || null,
-      cliente_ideal:    document.getElementById('fClienteIdeal').value.trim()    || null,
-      como_presentarla: document.getElementById('fComoPresentarla').value.trim() || null,
+      material:         document.getElementById('fMaterial').value.trim()    || null,
+      composicion:      document.getElementById('fComposicion').value.trim() || null,
+      cuidado:          document.getElementById('fCuidado').value.trim()     || null,
+      por_que_vale:     document.getElementById('fDescripcion')?.value.trim() || null,
     };
+    const cat = document.getElementById('fCategoria').value;
     const prendaData = {
       numero:            document.getElementById('fId').value.trim(),
-      nombre:            document.getElementById('fNombre').value.trim() || document.getElementById('fId').value.trim(),
-      marca:             document.getElementById('fMarca').value.trim()        || null,
-      color:             document.getElementById('fColor').value.trim()        || null,
-      categoria:         document.getElementById('fCategoria').value           || null,
-      departamento:      document.getElementById('fDepartamento').value        || 'DAMA',
-      vendedora_id:      document.getElementById('fVendedora').value           || null,
-      talla_etiqueta:    document.getElementById('fTallaEtiqueta').value.trim()|| null,
-      talla_real:        document.getElementById('fTallaReal').value.trim()    || null,
-      medida_1_nombre:   getMedidas(document.getElementById('fCategoria').value)[0],
+      nombre:            document.getElementById('fNombre')?.value.trim() || document.getElementById('fId').value.trim(),
+      marca:             document.getElementById('fMarca')?.value.trim()           || null,
+      color:             document.getElementById('fColor').value.trim()            || null,
+      categoria:         cat                                                        || null,
+      departamento:      document.getElementById('fDepartamento').value            || 'DAMA',
+      vendedora_id:      document.getElementById('fVendedora').value               || null,
+      talla_etiqueta:    document.getElementById('fTallaEtiqueta')?.value.trim()   || null,
+      talla_real:        document.getElementById('fTallaReal').value.trim()        || null,
+      medida_1_nombre:   getMedidas(cat)[0],
       medida_1_valor:    parseFloat(document.getElementById('fMedida1Valor').value) || null,
-      medida_2_nombre:   getMedidas(document.getElementById('fCategoria').value)[1],
+      medida_2_nombre:   getMedidas(cat)[1],
       medida_2_valor:    parseFloat(document.getElementById('fMedida2Valor').value) || null,
-      precio_costo:      parseFloat(document.getElementById('fPrecioCosto').value)    || 0,
-      precio_min:        parseFloat(document.getElementById('fPrecioMin').value)       || 0,
-      precio_max:        parseFloat(document.getElementById('fPrecioMax').value)       || 0,
+      precio_costo:      parseFloat(document.getElementById('fPrecioCosto').value)  || 0,
+      precio_min:        parseFloat(document.getElementById('fPrecioMin').value)    || 0,
+      precio_max:        parseFloat(document.getElementById('fPrecioMax').value)    || 0,
       disponible:        false,
       baja:              false,
       fecha_adquisicion: new Date().toISOString(),
       descripcion:       Object.values(_desc).some(Boolean) ? JSON.stringify(_desc) : null,
-      observaciones:     document.getElementById('fObservaciones')?.value.trim() || null,
+      observaciones:     document.getElementById('fObservaciones')?.value.trim()   || null,
     };
 
     const { data: prenda, error } = await db.from('prendas').insert(prendaData).select().single();
@@ -620,6 +709,7 @@ async function handlePrendaSubmit(e) {
     selectedFotosPrenda   = [];
     selectedFotosEtiqueta = [];
     e.target.reset();
+    document.getElementById('iaResultsSection')?.classList.add('hidden');
     renderPrendaPreviews();
     renderEtiquetaPreviews();
     updateIAButton();
