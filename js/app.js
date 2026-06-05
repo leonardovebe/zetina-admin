@@ -157,7 +157,7 @@ async function renderPrendas() {
           <div class="form-grid form-grid-2">
             <div class="form-group">
               <label>ID de la prenda *</label>
-              <input type="text" id="fId" required placeholder="Ej: SAL-001, RAC-045…">
+              <input type="text" id="fNumero" required placeholder="Ej: SAL-001, RAC-045…">
             </div>
           </div>
         </div>
@@ -392,12 +392,6 @@ async function renderPrendas() {
     actualizarLabelesMedidas('f', e.target.value);
   });
 
-  // Cálculo automático de precios en tiempo real
-  const recalcular = () => calcularPreciosAuto();
-  document.getElementById('fPrecioMin').addEventListener('input', recalcular);
-  document.getElementById('fId').addEventListener('input', recalcular);
-  console.log('[precios] listeners registrados — fPrecioMin:', !!document.getElementById('fPrecioMin'), '| fId:', !!document.getElementById('fId'));
-
   // Continuar sin IA → mostrar sección de campos directamente
   document.getElementById('btnSinIA').addEventListener('click', () => {
     document.getElementById('iaResultsSection').classList.remove('hidden');
@@ -406,6 +400,12 @@ async function renderPrendas() {
 
   loadCategorias().then(fillCategoriaSelect);
   updateIAButton();
+
+  // Listeners de precio al final, garantizando que el DOM esté listo
+  setTimeout(() => {
+    document.getElementById('fPrecioMin')?.addEventListener('input', calcularPreciosAuto);
+    document.getElementById('fNumero')?.addEventListener('input', calcularPreciosAuto);
+  }, 0);
 }
 
 function bindCatNuevaForm(selectId, wrapId, inputId, btnAddId, btnCancelId, tableName = 'categorias_prendas') {
@@ -470,34 +470,24 @@ function _aplicarPreciosAuto(min, prefijo, vendEl, maxEl) {
 
   vendEl.value = vend;
   maxEl.value  = precioMax;
-
-  console.log('[precios] prefijo:', prefijo, '| precio_min:', min, '| mult:', mult ?? 'sin prefijo', '| visionaria:', vend, '| precio_max:', precioMax);
 }
 
 function calcularPreciosAuto() {
-  const idRaw   = document.getElementById('fId')?.value ?? '';
-  const prefijo = idRaw.trim().toUpperCase().slice(0, 3);
-  const min     = parseFloat(document.getElementById('fPrecioMin')?.value) || 0;
-  const vendEl  = document.getElementById('fPrecioVendedora');
-  const maxEl   = document.getElementById('fPrecioMax');
-
-  console.log('[precios] calcularPreciosAuto — fId raw:', JSON.stringify(idRaw), '| fPrecioMin el:', !!document.getElementById('fPrecioMin'), '| fPrecioVendedora el:', !!vendEl, '| fPrecioMax el:', !!maxEl);
-
-  if (!vendEl || !maxEl) { console.warn('[precios] elementos no encontrados en el DOM'); return; }
-  _aplicarPreciosAuto(min, prefijo, vendEl, maxEl);
+  const prefijo  = document.getElementById('fNumero')?.value?.trim().toUpperCase().substring(0, 3) ?? '';
+  const precioMin = parseFloat(document.getElementById('fPrecioMin')?.value) || 0;
+  const vendEl   = document.getElementById('fPrecioVendedora');
+  const maxEl    = document.getElementById('fPrecioMax');
+  if (!vendEl || !maxEl) return;
+  _aplicarPreciosAuto(precioMin, prefijo, vendEl, maxEl);
 }
 
 function _calcularPreciosModal() {
-  const idRaw   = document.getElementById('eId')?.value ?? '';
-  const prefijo = idRaw.trim().toUpperCase().slice(0, 3);
-  const min     = parseFloat(document.getElementById('ePrecioMin')?.value) || 0;
-  const vendEl  = document.getElementById('eCosto');
-  const maxEl   = document.getElementById('ePrecioMax');
-
-  console.log('[precios] _calcularPreciosModal — eId raw:', JSON.stringify(idRaw), '| ePrecioMin el:', !!document.getElementById('ePrecioMin'), '| eCosto el:', !!vendEl, '| ePrecioMax el:', !!maxEl);
-
-  if (!vendEl || !maxEl) { console.warn('[precios] elementos modal no encontrados'); return; }
-  _aplicarPreciosAuto(min, prefijo, vendEl, maxEl);
+  const prefijo  = document.getElementById('eId')?.value?.trim().toUpperCase().substring(0, 3) ?? '';
+  const precioMin = parseFloat(document.getElementById('ePrecioMin')?.value) || 0;
+  const vendEl   = document.getElementById('eCosto');
+  const maxEl    = document.getElementById('ePrecioMax');
+  if (!vendEl || !maxEl) return;
+  _aplicarPreciosAuto(precioMin, prefijo, vendEl, maxEl);
 }
 
 function bindPhotoSection(areaId, inputId, previewsId, store, renderFn) {
@@ -608,7 +598,7 @@ async function handleGenerarIA() {
       images.push(await uploadForAI(selectedFotosEtiqueta[i], 'etiqueta', i));
     }
 
-    const idVal  = document.getElementById('fId').value.trim().toUpperCase();
+    const idVal  = document.getElementById('fNumero').value.trim().toUpperCase();
     const prefix = idVal.slice(0, 3);
     const categoriaLabels = { SAL: 'Saldo', RAC: 'Ropa alta calidad', JOY: 'Joyería/Accesorios', INT: 'Ropa interior' };
     const contexto = {
@@ -694,8 +684,8 @@ async function handlePrendaSubmit(e) {
     };
     const cat = document.getElementById('fCategoria').value;
     const prendaData = {
-      numero:            document.getElementById('fId').value.trim(),
-      nombre:            document.getElementById('fNombre')?.value.trim() || document.getElementById('fId').value.trim(),
+      numero:            document.getElementById('fNumero').value.trim(),
+      nombre:            document.getElementById('fNombre')?.value.trim() || document.getElementById('fNumero').value.trim(),
       marca:             document.getElementById('fMarca')?.value.trim()           || null,
       color:             document.getElementById('fColor').value.trim()            || null,
       categoria:         cat                                                        || null,
