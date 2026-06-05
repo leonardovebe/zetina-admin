@@ -307,55 +307,81 @@ async function renderPrendas() {
           </button>
           <span class="ia-hint">Rellena nombre, marca, talla y descripción automáticamente</span>
         </div>
-        <!-- ══ CAMPOS EDITABLES (IA los rellena, admin puede editar) ══ -->
+        <!-- ══ CAMPOS GENERADOS POR IA (siempre visibles, editables) ══ -->
         <div id="iaResultsSection" class="ia-results-section">
 
           <div class="ia-results-header">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;flex-shrink:0">
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
             </svg>
-            Revisa y edita antes de guardar
+            Información de la prenda — la IA rellena estos campos, puedes editar
           </div>
 
-          <!-- 11. Nombre -->
+          <!-- 14. Nombre / Marca / Color / Talla marcada -->
           <div class="form-section">
-            <div class="form-section-title">Nombre de la prenda *</div>
-            <div class="form-group">
-              <input type="text" id="fNombre" placeholder="Máx 5 palabras incluyendo marca" maxlength="120">
-              <p class="field-hint">Ej: "Blazer Structured Negro Theory" — máx 5 palabras, tono boutique</p>
-            </div>
-          </div>
-
-          <!-- 12. Marca -->
-          <div class="form-section">
-            <div class="form-section-title">Marca</div>
+            <div class="form-section-title">Identificación</div>
             <div class="form-grid form-grid-2">
               <div class="form-group">
+                <label>Nombre *</label>
+                <input type="text" id="fNombre" placeholder="Máx 5 palabras incluyendo marca" maxlength="120">
+                <p class="field-hint">Ej: "Blazer Structured Negro Theory"</p>
+              </div>
+              <div class="form-group">
+                <label>Marca</label>
                 <input type="text" id="fMarca" placeholder="Marca de la prenda">
               </div>
-            </div>
-          </div>
-
-          <!-- 13. Talla marcada -->
-          <div class="form-section">
-            <div class="form-section-title">Talla marcada</div>
-            <div class="form-grid form-grid-2">
               <div class="form-group">
+                <label>Color</label>
+                <input type="text" id="fColor" placeholder="Ej: vino, nude, azul marino">
+              </div>
+              <div class="form-group">
+                <label>Talla marcada</label>
                 <input type="text" id="fTallaEtiqueta" placeholder="Talla exacta de la etiqueta">
               </div>
             </div>
           </div>
 
-          <!-- 14. Descripción completa -->
+          <!-- 18-20. Ficha técnica -->
           <div class="form-section">
-            <div class="form-section-title">Descripción completa</div>
-            <div class="form-group">
-              <textarea id="fDescripcion" rows="8" style="resize:vertical"
-                placeholder="La IA llenará este campo con argumentos de venta, cliente ideal y cómo presentarla…"></textarea>
+            <div class="form-section-title">Ficha técnica</div>
+            <div class="form-grid form-grid-2">
+              <div class="form-group">
+                <label>Material</label>
+                <input type="text" id="fMaterial" placeholder="Ej: Algodón, Poliéster, Viscosa">
+              </div>
+              <div class="form-group">
+                <label>Cuidado</label>
+                <input type="text" id="fCuidado" placeholder="Ej: Lavar a mano, no planchar">
+              </div>
+            </div>
+            <div class="form-group" style="margin-top:12px">
+              <label>Composición</label>
+              <textarea id="fComposicion" rows="2" style="resize:vertical"
+                placeholder="Ej: 95% algodón, 5% elastano"></textarea>
             </div>
           </div>
 
-          <!-- 15. Guardar -->
+          <!-- 21-23. Cómo vender -->
+          <div class="form-section">
+            <div class="form-section-title">Cómo vender</div>
+            <div class="form-group">
+              <label>¿Por qué vale lo que cuesta?</label>
+              <textarea id="fPorQueVale" rows="4" style="resize:vertical"
+                placeholder="Argumentos de valor: calidad, marca, exclusividad…"></textarea>
+            </div>
+            <div class="form-group" style="margin-top:12px">
+              <label>Cliente ideal</label>
+              <textarea id="fClienteIdeal" rows="3" style="resize:vertical"
+                placeholder="A quién le queda perfecta, qué tipo de silueta favorece…"></textarea>
+            </div>
+            <div class="form-group" style="margin-top:12px">
+              <label>Cómo presentarla</label>
+              <textarea id="fComoPresentarla" rows="4" style="resize:vertical"
+                placeholder="Guión para presentarla y cerrar la venta…"></textarea>
+            </div>
+          </div>
+
+          <!-- 24. Guardar -->
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" id="submitPrendaBtn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px;flex-shrink:0">
@@ -367,13 +393,8 @@ async function renderPrendas() {
 
         </div>
 
-        <!-- Campos técnicos ocultos (llenados por IA) -->
-        <input type="hidden" id="fColor" value="">
+        <!-- Campos de sistema ocultos -->
         <input type="hidden" id="fVendedora" value="">
-        <input type="hidden" id="fPrecioCosto" value="0">
-        <input type="hidden" id="fMaterial" value="">
-        <input type="hidden" id="fComposicion" value="">
-        <input type="hidden" id="fCuidado" value="">
 
       </form>
     </div>`;
@@ -608,20 +629,16 @@ async function handleGenerarIA() {
 
     const r = await res.json();
 
-    // Campos visibles editables
-    if (r.nombre)  document.getElementById('fNombre').value       = r.nombre;
-    if (r.marca)   document.getElementById('fMarca').value        = r.marca;
-    if (r.talla)   document.getElementById('fTallaEtiqueta').value = r.talla;
-
-    // Descripción completa: combinar los campos de ventas en un solo textarea
-    const partes = [r.por_que_vale, r.cliente_ideal, r.como_presentarla].filter(Boolean);
-    if (partes.length) document.getElementById('fDescripcion').value = partes.join('\n\n');
-
-    // Campos técnicos ocultos
-    if (r.color)       document.getElementById('fColor').value       = r.color;
-    if (r.material)    document.getElementById('fMaterial').value    = r.material;
-    if (r.composicion) document.getElementById('fComposicion').value = r.composicion;
-    if (r.cuidado)     document.getElementById('fCuidado').value     = r.cuidado;
+    if (r.nombre)          document.getElementById('fNombre').value         = r.nombre;
+    if (r.marca)           document.getElementById('fMarca').value          = r.marca;
+    if (r.color)           document.getElementById('fColor').value          = r.color;
+    if (r.talla)           document.getElementById('fTallaEtiqueta').value  = r.talla;
+    if (r.material)        document.getElementById('fMaterial').value       = r.material;
+    if (r.composicion)     document.getElementById('fComposicion').value    = r.composicion;
+    if (r.cuidado)         document.getElementById('fCuidado').value        = r.cuidado;
+    if (r.por_que_vale)    document.getElementById('fPorQueVale').value     = r.por_que_vale;
+    if (r.cliente_ideal)   document.getElementById('fClienteIdeal').value   = r.cliente_ideal;
+    if (r.como_presentarla) document.getElementById('fComoPresentarla').value = r.como_presentarla;
 
     showToast('¡Campos llenados con IA! Revisa y edita antes de guardar.', 'success');
   } catch (err) {
@@ -658,17 +675,19 @@ async function handlePrendaSubmit(e) {
 
   try {
     const _desc = {
-      material:         document.getElementById('fMaterial').value.trim()    || null,
-      composicion:      document.getElementById('fComposicion').value.trim() || null,
-      cuidado:          document.getElementById('fCuidado').value.trim()     || null,
-      por_que_vale:     document.getElementById('fDescripcion')?.value.trim() || null,
+      material:         document.getElementById('fMaterial').value.trim()        || null,
+      composicion:      document.getElementById('fComposicion').value.trim()     || null,
+      cuidado:          document.getElementById('fCuidado').value.trim()         || null,
+      por_que_vale:     document.getElementById('fPorQueVale').value.trim()      || null,
+      cliente_ideal:    document.getElementById('fClienteIdeal').value.trim()    || null,
+      como_presentarla: document.getElementById('fComoPresentarla').value.trim() || null,
     };
     const cat = document.getElementById('fCategoria').value;
     const prendaData = {
       numero:            document.getElementById('fNumero').value.trim(),
       nombre:            document.getElementById('fNombre')?.value.trim() || document.getElementById('fNumero').value.trim(),
       marca:             document.getElementById('fMarca')?.value.trim()           || null,
-      color:             document.getElementById('fColor').value.trim()            || null,
+      color:             document.getElementById('fColor')?.value.trim()           || null,
       categoria:         cat                                                        || null,
       departamento:      document.getElementById('fDepartamento').value            || 'DAMA',
       vendedora_id:      document.getElementById('fVendedora').value               || null,
