@@ -828,7 +828,7 @@ async function loadInventario() {
     });
 
     let q = db.from('prendas')
-      .select('id, nombre, marca, categoria, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, precio_costo, precio_min, precio_max, disponible, baja, emoji, fecha_adquisicion, vendedoras(nombre), fotos_prendas(url)')
+      .select('id, numero, nombre, marca, categoria, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, precio_costo, precio_min, precio_max, disponible, baja, emoji, fecha_adquisicion, vendedoras(nombre), fotos_prendas(url)')
       .order('created_at', { ascending: false });
 
     if (_invFilter === 'disponible') q = q.eq('disponible', true).eq('baja', false);
@@ -875,7 +875,7 @@ async function loadInventario() {
                 <td>${foto
                   ? `<img src="${foto}" class="table-thumb" alt="">`
                   : `<div class="table-thumb-empty">${p.emoji || '👚'}</div>`}</td>
-                <td><span class="id-badge">${formatZtId(p.id)}</span></td>
+                <td><span class="id-badge">${p.numero || formatZtId(p.id)}</span></td>
                 <td class="td-name">${p.nombre}</td>
                 <td>${p.marca || '—'}</td>
                 <td>${p.categoria || '—'}</td>
@@ -2283,7 +2283,7 @@ async function loadDevoluciones() {
 
   try {
     let q = db.from('devoluciones')
-      .select('*, vendedoras(id, nombre, telefono), prendas(id, nombre, precio_costo)')
+      .select('*, vendedoras(id, nombre, telefono), prendas(id, numero, nombre, precio_costo)')
       .order('created_at', { ascending: false });
 
     if (_devFiltro !== 'todas') q = q.eq('estado', _devFiltro);
@@ -2322,7 +2322,7 @@ async function loadDevoluciones() {
               const badgeClass  = d.estado === 'Aprobada' ? 'success' : d.estado === 'Rechazada' ? 'danger' : 'warning';
               return `<tr>
                 <td class="td-name">${d.vendedoras?.nombre || '—'}</td>
-                <td><span class="id-badge">${formatZtId(d.prenda_id)}</span></td>
+                <td><span class="id-badge">${d.prendas?.numero || formatZtId(d.prenda_id)}</span></td>
                 <td>${d.prendas?.nombre || '—'}</td>
                 <td>${d.motivo || '—'}</td>
                 <td>${formatDate(d.created_at)}</td>
