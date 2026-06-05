@@ -218,9 +218,23 @@ async function renderPrendas() {
           </div>
         </div>
 
-        <!-- 6. Precio mínimo con cálculo automático -->
+        <!-- 6. Costo -->
         <div class="form-section">
-          <div class="form-section-title">Precio</div>
+          <div class="form-section-title">Costo</div>
+          <div class="form-grid form-grid-2">
+            <div class="form-group">
+              <label>Costo de la prenda *</label>
+              <div class="input-prefix">
+                <span>$</span>
+                <input type="number" id="fPrecioCosto" min="0" step="1" placeholder="0" required>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7-9. Precios con cálculo automático -->
+        <div class="form-section">
+          <div class="form-section-title">Precio de venta</div>
           <div class="form-grid form-grid-3">
             <div class="form-group">
               <label>Precio mínimo *</label>
@@ -247,7 +261,7 @@ async function renderPrendas() {
           <p class="precios-note">Precio visionaria = 70% del mínimo. Máximo: SAL ×1.10 · RAC ×1.25 · JOY/INT ×1.40</p>
         </div>
 
-        <!-- 7. Fotos de la prenda -->
+        <!-- 10. Fotos de la prenda -->
         <div class="form-section">
           <div class="form-section-title">
             Fotos de la prenda
@@ -697,7 +711,7 @@ async function handlePrendaSubmit(e) {
       medida_1_valor:    parseFloat(document.getElementById('fMedida1Valor').value) || null,
       medida_2_nombre:   getMedidas(cat)[1],
       medida_2_valor:    parseFloat(document.getElementById('fMedida2Valor').value) || null,
-      precio_costo:      parseFloat(document.getElementById('fPrecioVendedora').value) || 0,
+      precio_costo:      parseFloat(document.getElementById('fPrecioCosto').value)     || 0,
       precio_min:        parseFloat(document.getElementById('fPrecioMin').value)     || 0,
       precio_max:        parseFloat(document.getElementById('fPrecioMax').value)     || 0,
       disponible:        false,
