@@ -86,8 +86,11 @@ const SECTION_TITLES = {
   categorias:   'Categorías de Prendas',
 };
 
+let _currentSection = '';
+
 function navigate(section) {
   if (!SECTION_TITLES[section]) section = 'financiero';
+  _currentSection = section;
 
   document.querySelectorAll('.nav-item').forEach(el =>
     el.classList.toggle('active', el.dataset.section === section)
@@ -258,7 +261,17 @@ async function renderPrendas() {
           </div>
         </div>
 
-        <!-- 8. Botón Generar con IA (visible solo con fotos de etiqueta) -->
+        <!-- 8. Observaciones para la IA -->
+        <div class="form-section">
+          <div class="form-section-title">Observaciones</div>
+          <div class="form-group">
+            <textarea id="fObservaciones" rows="3"
+              placeholder="Agrega notas sobre la prenda que ayuden a la IA a generar una mejor descripción. Ej: la tela es muy suave, el corte es generoso, ideal para ocasiones formales…"
+              style="resize:vertical"></textarea>
+          </div>
+        </div>
+
+        <!-- 9. Botón Generar con IA (visible solo con fotos de etiqueta) -->
         <div class="ia-btn-row hidden">
           <button type="button" id="btnGenerarIA" class="btn-ia">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -491,11 +504,12 @@ async function handleGenerarIA() {
     const prefix = idVal.slice(0, 3);
     const categoriaLabels = { SAL: 'Saldo', RAC: 'Ropa alta calidad', JOY: 'Joyería/Accesorios', INT: 'Ropa interior' };
     const contexto = {
-      categoria:     categoriaLabels[prefix] || null,
-      tallaEtiqueta: document.getElementById('fTallaEtiqueta').value.trim() || null,
-      tallaReal:     document.getElementById('fTallaReal').value.trim()     || null,
-      precioMin:     parseFloat(document.getElementById('fPrecioMin').value)  || null,
-      precioMax:     parseFloat(document.getElementById('fPrecioMax').value)  || null,
+      categoria:      categoriaLabels[prefix] || null,
+      tallaEtiqueta:  document.getElementById('fTallaEtiqueta').value.trim()  || null,
+      tallaReal:      document.getElementById('fTallaReal').value.trim()      || null,
+      precioMin:      parseFloat(document.getElementById('fPrecioMin').value)   || null,
+      precioMax:      parseFloat(document.getElementById('fPrecioMax').value)   || null,
+      observaciones:  document.getElementById('fObservaciones')?.value.trim()  || null,
     };
 
     const res = await fetch('/api/generar-descripcion', {
@@ -585,6 +599,7 @@ async function handlePrendaSubmit(e) {
       baja:              false,
       fecha_adquisicion: new Date().toISOString(),
       descripcion:       Object.values(_desc).some(Boolean) ? JSON.stringify(_desc) : null,
+      observaciones:     document.getElementById('fObservaciones')?.value.trim() || null,
     };
 
     const { data: prenda, error } = await db.from('prendas').insert(prendaData).select().single();
@@ -2797,6 +2812,69 @@ function parseDesc(json) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+//  AUTO-REFRESH: Supabase Realtime
+// ══════════════════════════════════════════════════════════════════════════════
+const _TABLE_SECTION_MAP = {
+  prendas:               ['inventario', 'financiero'],
+  fotos_prendas:         ['inventario'],
+  detalle_pedidos:       ['inventario', 'pedidos', 'financiero'],
+  pedidos:               ['pedidos', 'financiero'],
+  vendedoras:            ['vendedoras', 'financiero'],
+  inventario_vendedoras: ['vendedoras'],
+  clientes:              ['clientes', 'vendedoras', 'financiero'],
+  devoluciones:          ['devoluciones'],
+  gastos:                ['gastos', 'financiero'],
+  ventas:                ['financiero', 'vendedoras'],
+  abonos:                ['financiero'],
+  visionaria_stats:      ['vendedoras'],
+};
+
+const _SECTION_RELOAD = {
+  inventario:   () => loadInventario(),
+  pedidos:      () => loadPedidos(),
+  vendedoras:   () => { if (!document.querySelector('.vis-back-btn')) renderVendedoras(); },
+  clientes:     () => loadClientes(),
+  devoluciones: () => loadDevoluciones(),
+  gastos:       () => Promise.all([_loadGastosLista(), _loadGastosStats()]),
+  financiero:   () => renderFinanciero(),
+};
+
+let _realtimeDebounce;
+
+function _onRealtimeChange(table) {
+  const sections = _TABLE_SECTION_MAP[table] || [];
+  if (!sections.includes(_currentSection)) return;
+  clearTimeout(_realtimeDebounce);
+  _realtimeDebounce = setTimeout(() => {
+    const fn = _SECTION_RELOAD[_currentSection];
+    if (fn) {
+      fn();
+      showToast('Datos actualizados', 'realtime');
+    }
+  }, 1200);
+}
+
+function initRealtimeAutoRefresh() {
+  let ch = db.channel('admin-auto-refresh');
+  Object.keys(_TABLE_SECTION_MAP).forEach(table => {
+    ch = ch.on('postgres_changes', { event: '*', schema: 'public', table }, () => _onRealtimeChange(table));
+  });
+  ch.subscribe();
+}
+
+function manualRefresh() {
+  const btn = document.getElementById('refreshBtn');
+  if (btn) {
+    btn.classList.remove('spinning');
+    void btn.offsetWidth; // reflow para reiniciar animación
+    btn.classList.add('spinning');
+    btn.addEventListener('animationend', () => btn.classList.remove('spinning'), { once: true });
+  }
+  const fn = _SECTION_RELOAD[_currentSection];
+  if (fn) fn();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 //  BADGE PEDIDOS NUEVOS
 // ══════════════════════════════════════════════════════════════════════════════
 function updatePedidosBadge(count) {
@@ -2835,6 +2913,7 @@ async function initPedidosRealtime() {
 document.addEventListener('DOMContentLoaded', () => {
   checkAuth();
   initPedidosRealtime();
+  initRealtimeAutoRefresh();
 
   const session = getSession();
   if (session) {

@@ -7,7 +7,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
 
-  const { images, contexto } = req.body || {};
+  const { images, contexto = {} } = req.body || {};
   if (!Array.isArray(images) || !images.length) {
     return res.status(400).json({ error: 'Se requiere al menos una imagen' });
   }
@@ -36,16 +36,24 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  if (contexto && Object.values(contexto).some(Boolean)) {
-    const lineas = [];
-    if (contexto.categoria)     lineas.push(`- Categoría: ${contexto.categoria}`);
-    if (contexto.tallaEtiqueta) lineas.push(`- Talla etiqueta: ${contexto.tallaEtiqueta}`);
-    if (contexto.tallaReal)     lineas.push(`- Talla real: ${contexto.tallaReal}`);
-    if (contexto.precioMin)     lineas.push(`- Precio mínimo de venta: $${contexto.precioMin}`);
-    if (contexto.precioMax)     lineas.push(`- Precio máximo de venta: $${contexto.precioMax}`);
+  const lineasContexto = [];
+  if (contexto.categoria)     lineasContexto.push(`- Categoría: ${contexto.categoria}`);
+  if (contexto.tallaEtiqueta) lineasContexto.push(`- Talla etiqueta: ${contexto.tallaEtiqueta}`);
+  if (contexto.tallaReal)     lineasContexto.push(`- Talla real: ${contexto.tallaReal}`);
+  if (contexto.precioMin)     lineasContexto.push(`- Precio mínimo de venta: $${contexto.precioMin}`);
+  if (contexto.precioMax)     lineasContexto.push(`- Precio máximo de venta: $${contexto.precioMax}`);
+
+  if (lineasContexto.length) {
     content.push({
       type: 'text',
-      text: `CONTEXTO DE ESTA PRENDA (ya conocido — úsalo en los argumentos de venta):\n${lineas.join('\n')}`,
+      text: `CONTEXTO DE ESTA PRENDA (ya conocido — úsalo en los argumentos de venta):\n${lineasContexto.join('\n')}`,
+    });
+  }
+
+  if (contexto.observaciones) {
+    content.push({
+      type: 'text',
+      text: `Observaciones del vendedor sobre esta prenda: ${contexto.observaciones}. Tómalas en cuenta para generar una descripción más precisa y útil.`,
     });
   }
 

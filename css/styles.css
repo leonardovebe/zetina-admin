@@ -1206,9 +1206,17 @@ img { max-width: 100%; display: block; }
   max-width: 320px;
 }
 .toast.show { transform: translateY(0); opacity: 1; }
-.toast.toast-success { border-left: 3px solid var(--success); }
-.toast.toast-error   { border-left: 3px solid var(--danger); }
-.toast.toast-info    { border-left: 3px solid var(--purple); }
+.toast.toast-success  { border-left: 3px solid var(--success); }
+.toast.toast-error    { border-left: 3px solid var(--danger); }
+.toast.toast-info     { border-left: 3px solid var(--purple); }
+.toast.toast-realtime {
+  background: #855AA2;
+  color: #fff;
+  border-color: transparent;
+  border-left: 3px solid rgba(255,255,255,0.35);
+  font-size: 0.82rem;
+  padding: 9px 16px;
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    PIN LOGIN
@@ -1823,6 +1831,39 @@ img { max-width: 100%; display: block; }
   padding: 7px 12px;
   font-size: 0.875rem;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BOTÓN REFRESH
+══════════════════════════════════════════════════════════════════════════ */
+.section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-refresh {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border: 1.5px solid var(--border-strong);
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.btn-refresh:hover {
+  background: var(--accent-dim);
+  color: var(--purple);
+  border-color: var(--purple);
+}
+.btn-refresh svg { width: 14px; height: 14px; }
+.btn-refresh.spinning svg { animation: refreshSpin 0.55s ease-in-out; }
+@keyframes refreshSpin { to { transform: rotate(360deg); } }
 
 /* ══════════════════════════════════════════════════════════════════════════
    RESPONSIVE
