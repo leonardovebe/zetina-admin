@@ -115,6 +115,37 @@ function navigate(section) {
 // ══════════════════════════════════════════════════════════════════════════════
 let selectedFotosPrenda   = [];
 let selectedFotosEtiqueta = [];
+let _dragSrcIdx = null;
+
+function _bindPhotoDrag(container, store, renderFn) {
+  container.querySelectorAll('[draggable="true"]').forEach((item, i) => {
+    item.addEventListener('dragstart', e => {
+      _dragSrcIdx = i;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    item.addEventListener('dragend', () => {
+      _dragSrcIdx = null;
+      container.querySelectorAll('.dragging, .drag-over').forEach(el => {
+        el.classList.remove('dragging', 'drag-over');
+      });
+    });
+    item.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      container.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+      item.classList.add('drag-over');
+    });
+    item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+    item.addEventListener('drop', e => {
+      e.preventDefault();
+      if (_dragSrcIdx === null || _dragSrcIdx === i) return;
+      const moved = store.splice(_dragSrcIdx, 1)[0];
+      store.splice(i, 0, moved);
+      renderFn();
+    });
+  });
+}
 
 async function loadCategorias() {
   const { data, error } = await db
@@ -535,7 +566,7 @@ function _addFotosTo(files, store, renderFn) {
   updateIAButton();
 }
 
-function _renderPhotoArea(store, previewsId, placeholderId, renderFn) {
+function _renderPhotoArea(store, previewsId, placeholderId, renderFn, draggable = false) {
   const container   = document.getElementById(previewsId);
   const placeholder = document.getElementById(placeholderId);
   if (!container) return;
@@ -546,7 +577,7 @@ function _renderPhotoArea(store, previewsId, placeholderId, renderFn) {
   }
   if (placeholder) placeholder.style.display = 'none';
   container.innerHTML = store.map((f, i) => `
-    <div class="photo-preview-item">
+    <div class="photo-preview-item"${draggable ? ' draggable="true"' : ''}>
       <img src="${URL.createObjectURL(f)}" alt="${f.name}">
       <button type="button" class="photo-remove-btn" data-i="${i}">×</button>
     </div>`).join('');
@@ -558,10 +589,11 @@ function _renderPhotoArea(store, previewsId, placeholderId, renderFn) {
       updateIAButton();
     });
   });
+  if (draggable) _bindPhotoDrag(container, store, renderFn);
 }
 
-function renderPrendaPreviews()   { _renderPhotoArea(selectedFotosPrenda,   'photoPreviewsPrenda',   'photoPlaceholderPrenda',   renderPrendaPreviews);   }
-function renderEtiquetaPreviews() { _renderPhotoArea(selectedFotosEtiqueta, 'photoPreviewsEtiqueta', 'photoPlaceholderEtiqueta', renderEtiquetaPreviews); }
+function renderPrendaPreviews()   { _renderPhotoArea(selectedFotosPrenda,   'photoPreviewsPrenda',   'photoPlaceholderPrenda',   renderPrendaPreviews,   true);  }
+function renderEtiquetaPreviews() { _renderPhotoArea(selectedFotosEtiqueta, 'photoPreviewsEtiqueta', 'photoPlaceholderEtiqueta', renderEtiquetaPreviews, false); }
 
 function updateIAButton() {
   const btn = document.getElementById('btnGenerarIA');
@@ -727,10 +759,11 @@ async function handlePrendaSubmit(e) {
 
     let uploadErrors = 0;
     const fotoErrorMsgs = [];
-    for (const foto of selectedFotosPrenda) {
+    for (let fIdx = 0; fIdx < selectedFotosPrenda.length; fIdx++) {
+      const foto = selectedFotosPrenda[fIdx];
       try {
         const url = await uploadFoto(foto, prenda.id);
-        await db.from('fotos_prendas').insert({ prenda_id: prenda.id, url });
+        await db.from('fotos_prendas').insert({ prenda_id: prenda.id, url, orden: fIdx });
       } catch (fotoErr) {
         uploadErrors++;
         fotoErrorMsgs.push(`${foto.name}: ${fotoErr.message || JSON.stringify(fotoErr)}`);
@@ -1210,7 +1243,7 @@ function _renderEditFotos() {
   if (!grid) return;
 
   const existHtml = _editFotosExistentes.map((f, i) => `
-    <div class="edit-foto-item${f.deleted ? ' edit-foto-item--deleted' : ''}">
+    <div class="edit-foto-item${f.deleted ? ' edit-foto-item--deleted' : ''}"${!f.deleted ? ' draggable="true"' : ''} data-exist-i="${i}">
       <img src="${f.url}" alt="">
       <button type="button" class="edit-foto-del" data-i="${i}" data-type="exist" title="${f.deleted ? 'Deshacer' : 'Eliminar'}">
         ${f.deleted ? '↩' : '×'}
@@ -1236,6 +1269,37 @@ function _renderEditFotos() {
       } else {
         _editFotosNuevas.splice(i, 1);
       }
+      _renderEditFotos();
+    });
+  });
+
+  // Drag & drop para reordenar fotos existentes no eliminadas
+  const draggableItems = [...grid.querySelectorAll('.edit-foto-item[draggable="true"]')];
+  draggableItems.forEach((item, dragPos) => {
+    item.addEventListener('dragstart', e => {
+      _dragSrcIdx = dragPos;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    item.addEventListener('dragend', () => {
+      _dragSrcIdx = null;
+      grid.querySelectorAll('.dragging, .drag-over').forEach(el => el.classList.remove('dragging', 'drag-over'));
+    });
+    item.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      grid.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+      item.classList.add('drag-over');
+    });
+    item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+    item.addEventListener('drop', e => {
+      e.preventDefault();
+      if (_dragSrcIdx === null || _dragSrcIdx === dragPos) return;
+      // Reorder within _editFotosExistentes using the original indices stored in data-exist-i
+      const srcOrigIdx  = +draggableItems[_dragSrcIdx].dataset.existI;
+      const destOrigIdx = +item.dataset.existI;
+      const moved = _editFotosExistentes.splice(srcOrigIdx, 1)[0];
+      _editFotosExistentes.splice(destOrigIdx, 0, moved);
       _renderEditFotos();
     });
   });
@@ -1291,13 +1355,20 @@ async function guardarEditPrenda(id, hasExtras) {
       if (delErr) console.warn('Error al eliminar fotos:', delErr.message);
     }
 
-    // Upload and register new fotos
+    // Update orden for surviving existing fotos (respects drag & drop reordering)
+    const surviving = _editFotosExistentes.filter(f => !f.deleted);
+    for (let oIdx = 0; oIdx < surviving.length; oIdx++) {
+      await db.from('fotos_prendas').update({ orden: oIdx }).eq('id', surviving[oIdx].id);
+    }
+
+    // Upload and register new fotos (appended after existing)
     let uploadErrors = 0;
     const fotoErrorMsgs = [];
-    for (const file of _editFotosNuevas) {
+    for (let nIdx = 0; nIdx < _editFotosNuevas.length; nIdx++) {
+      const file = _editFotosNuevas[nIdx];
       try {
         const url = await uploadFoto(file, id);
-        await db.from('fotos_prendas').insert({ prenda_id: id, url });
+        await db.from('fotos_prendas').insert({ prenda_id: id, url, orden: surviving.length + nIdx });
       } catch (fotoErr) {
         uploadErrors++;
         fotoErrorMsgs.push(`${file.name}: ${fotoErr.message || JSON.stringify(fotoErr)}`);
