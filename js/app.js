@@ -307,10 +307,8 @@ async function renderPrendas() {
           </button>
           <span class="ia-hint">Rellena nombre, marca, talla y descripción automáticamente</span>
         </div>
-        <button type="button" id="btnSinIA" class="skip-ia-link">Continuar sin IA →</button>
-
-        <!-- ══ CAMPOS GENERADOS POR IA (ocultos hasta correr IA o "Continuar sin IA") ══ -->
-        <div id="iaResultsSection" class="ia-results-section hidden">
+        <!-- ══ CAMPOS EDITABLES (IA los rellena, admin puede editar) ══ -->
+        <div id="iaResultsSection" class="ia-results-section">
 
           <div class="ia-results-header">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;flex-shrink:0">
@@ -390,12 +388,6 @@ async function renderPrendas() {
 
   document.getElementById('fCategoria').addEventListener('change', e => {
     actualizarLabelesMedidas('f', e.target.value);
-  });
-
-  // Continuar sin IA → mostrar sección de campos directamente
-  document.getElementById('btnSinIA').addEventListener('click', () => {
-    document.getElementById('iaResultsSection').classList.remove('hidden');
-    document.getElementById('iaResultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
   loadCategorias().then(fillCategoriaSelect);
@@ -631,11 +623,6 @@ async function handleGenerarIA() {
     if (r.composicion) document.getElementById('fComposicion').value = r.composicion;
     if (r.cuidado)     document.getElementById('fCuidado').value     = r.cuidado;
 
-    // Mostrar sección de resultados
-    const seccion = document.getElementById('iaResultsSection');
-    seccion.classList.remove('hidden');
-    seccion.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
     showToast('¡Campos llenados con IA! Revisa y edita antes de guardar.', 'success');
   } catch (err) {
     showToast(err.message || 'Error al conectar con la IA', 'error');
@@ -719,7 +706,6 @@ async function handlePrendaSubmit(e) {
     selectedFotosPrenda   = [];
     selectedFotosEtiqueta = [];
     e.target.reset();
-    document.getElementById('iaResultsSection')?.classList.add('hidden');
     renderPrendaPreviews();
     renderEtiquetaPreviews();
     updateIAButton();
