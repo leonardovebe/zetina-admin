@@ -159,16 +159,35 @@ async function loadCategorias() {
   return data || [];
 }
 
+async function loadCategoriasConReintento(maxIntentos = 3, delayMs = 500) {
+  for (let i = 1; i <= maxIntentos; i++) {
+    const cats = await loadCategorias();
+    if (cats.length > 0) return cats;
+    if (i < maxIntentos) await new Promise(r => setTimeout(r, delayMs));
+  }
+  return [];
+}
+
 function fillCategoriaSelect(cats) {
   const sel = document.getElementById('fCategoria');
   if (!sel) return;
-  const anchor = sel.querySelector('option[value="__nueva__"]');
-  cats.forEach(c => {
-    const opt = new Option(c.nombre, c.nombre);
-    sel.insertBefore(opt, anchor);
+
+  // Limpiar opciones dinámicas previas para que la función sea idempotente
+  [...sel.options].forEach(o => {
+    if (o.value !== '' && o.value !== '__nueva__') o.remove();
   });
-  if (!cats.length) {
-    const placeholder = new Option('(sin categorías en BD)', '', false, false);
+  // Quitar placeholder de error si existe
+  const errOpt = sel.querySelector('option[disabled]');
+  if (errOpt) errOpt.remove();
+
+  const anchor = sel.querySelector('option[value="__nueva__"]');
+  if (cats.length) {
+    cats.forEach(c => {
+      const opt = new Option(c.nombre, c.nombre);
+      sel.insertBefore(opt, anchor);
+    });
+  } else {
+    const placeholder = new Option('(sin categorías — pulsa ↺ para reintentar)', '', false, false);
     placeholder.disabled = true;
     sel.insertBefore(placeholder, anchor);
   }
@@ -212,10 +231,18 @@ async function renderPrendas() {
           <div class="form-section-title">Categoría</div>
           <div class="form-grid form-grid-2">
             <div class="form-group">
-              <select id="fCategoria">
-                <option value="">Sin categoría</option>
-                <option value="__nueva__">＋ Nueva categoría</option>
-              </select>
+              <div style="display:flex;gap:8px;align-items:center">
+                <select id="fCategoria" style="flex:1">
+                  <option value="">Sin categoría</option>
+                  <option value="__nueva__">＋ Nueva categoría</option>
+                </select>
+                <button type="button" id="btnRecargarCats" class="btn-refresh" title="Recargar categorías" style="flex-shrink:0">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                  </svg>
+                </button>
+              </div>
               <div id="fCatNuevaWrap" class="cat-nueva-inline hidden">
                 <input type="text" id="fCatNuevaInput" placeholder="Nombre de la categoría…" maxlength="60">
                 <button type="button" id="fCatNuevaBtn" class="btn-cat-add">Agregar</button>
@@ -457,8 +484,20 @@ async function renderPrendas() {
     actualizarLabelesMedidas('f', e.target.value);
   });
 
-  loadCategorias().then(fillCategoriaSelect);
+  loadCategoriasConReintento().then(fillCategoriaSelect);
   updateIAButton();
+
+  document.getElementById('btnRecargarCats')?.addEventListener('click', async function() {
+    const btn = this;
+    btn.classList.add('spinning');
+    btn.disabled = true;
+    const cats = await loadCategoriasConReintento();
+    fillCategoriaSelect(cats);
+    btn.classList.remove('spinning');
+    btn.disabled = false;
+    if (cats.length) showToast(`${cats.length} categorías cargadas`, 'success');
+    else showToast('No se encontraron categorías', 'info');
+  });
 
   // Validación de ID duplicado en tiempo real
   let _numeroDebounce;
