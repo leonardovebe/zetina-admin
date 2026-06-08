@@ -188,7 +188,8 @@ async function renderPrendas() {
           <div class="form-grid form-grid-2">
             <div class="form-group">
               <label>ID de la prenda *</label>
-              <input type="text" id="fNumero" required placeholder="Ej: SAL-001, RAC-045…">
+              <input type="text" id="fNumero" required placeholder="Ej: SAL-001, RAC-045…" autocomplete="off">
+              <div id="fNumeroStatus" class="id-check-msg"></div>
             </div>
           </div>
         </div>
@@ -458,6 +459,63 @@ async function renderPrendas() {
 
   loadCategorias().then(fillCategoriaSelect);
   updateIAButton();
+
+  // Validación de ID duplicado en tiempo real
+  let _numeroDebounce;
+  document.getElementById('fNumero').addEventListener('input', () => {
+    clearTimeout(_numeroDebounce);
+    _numeroDebounce = setTimeout(_validarNumeroUnico, 500);
+  });
+}
+
+let _numeroValido = true; // estado global para bloquear submit si hay duplicado
+
+async function _validarNumeroUnico() {
+  const input  = document.getElementById('fNumero');
+  const status = document.getElementById('fNumeroStatus');
+  const btn    = document.getElementById('submitPrendaBtn');
+  if (!input || !status) return;
+
+  const val = input.value.trim();
+  if (!val) {
+    status.className = 'id-check-msg';
+    status.innerHTML = '';
+    input.classList.remove('id-input-ok', 'id-input-error');
+    _numeroValido = true;
+    if (btn) btn.disabled = false;
+    return;
+  }
+
+  status.className = 'id-check-msg checking';
+  status.innerHTML = '⏳ Verificando…';
+
+  const { count, error } = await db
+    .from('prendas')
+    .select('id', { count: 'exact', head: true })
+    .eq('numero', val);
+
+  if (error) {
+    status.className = 'id-check-msg';
+    status.innerHTML = '';
+    _numeroValido = true;
+    return;
+  }
+
+  if (count > 0) {
+    status.className = 'id-check-msg error';
+    status.innerHTML = '✕ Este ID ya existe. Usa un ID diferente.';
+    input.classList.add('id-input-error');
+    input.classList.remove('id-input-ok');
+    _numeroValido = false;
+    if (btn) btn.disabled = true;
+  } else {
+    status.className = 'id-check-msg ok';
+    status.innerHTML = '✓ ID disponible';
+    input.classList.add('id-input-ok');
+    input.classList.remove('id-input-error');
+    _numeroValido = true;
+    if (btn) btn.disabled = false;
+  }
 }
 
 function bindCatNuevaForm(selectId, wrapId, inputId, btnAddId, btnCancelId, tableName = 'categorias_prendas') {
@@ -716,6 +774,12 @@ async function uploadFoto(file, prendaId) {
 async function handlePrendaSubmit(e) {
   e.preventDefault();
   const btn = document.getElementById('submitPrendaBtn');
+
+  if (!_numeroValido) {
+    showToast('El ID ya existe. Cambia el número de la prenda.', 'error');
+    return;
+  }
+
   btn.disabled = true;
   btn.textContent = 'Guardando…';
 
@@ -773,6 +837,11 @@ async function handlePrendaSubmit(e) {
     selectedFotosPrenda   = [];
     selectedFotosEtiqueta = [];
     e.target.reset();
+    // Limpiar estado de validación del ID
+    _numeroValido = true;
+    const st = document.getElementById('fNumeroStatus');
+    if (st) { st.className = 'id-check-msg'; st.innerHTML = ''; }
+    document.getElementById('fNumero')?.classList.remove('id-input-ok', 'id-input-error');
     renderPrendaPreviews();
     renderEtiquetaPreviews();
     updateIAButton();

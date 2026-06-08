@@ -957,6 +957,21 @@ img { max-width: 100%; display: block; }
   vertical-align: middle;
 }
 
+.id-check-msg {
+  font-size: 0.78rem;
+  margin-top: 5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 18px;
+}
+.id-check-msg.ok    { color: #16a34a; }
+.id-check-msg.error { color: #dc2626; }
+.id-check-msg.checking { color: var(--text-muted); }
+
+input.id-input-error  { border-color: #dc2626 !important; }
+input.id-input-ok     { border-color: #16a34a !important; }
+
 .precios-note, .field-hint {
   font-size: 0.78rem;
   color: var(--text-muted);
