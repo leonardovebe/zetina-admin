@@ -2402,14 +2402,14 @@ async function renderFinanciero() {
     const gastosFin     = gastosR.data    || [];
 
     // ── Ingresos ZETINA: price_vendedora = detalle_pedidos.precio ──────────────
-    const detallesPagados    = detallesTodos.filter(d => d.pedidos?.estado === 'Pagado');
-    const detallesPorCobrar  = detallesTodos.filter(d =>
-      d.pedidos?.estado === 'Entregado' || d.pedidos?.estado === 'En camino' || d.pedidos?.estado === 'En proceso'
-    );
-    // Para rentabilidad: pagados + entregados
-    const detallesRentab = detallesTodos.filter(d =>
+    const detallesPagados    = detallesTodos.filter(d =>
       d.pedidos?.estado === 'Pagado' || d.pedidos?.estado === 'Entregado'
     );
+    const detallesPorCobrar  = detallesTodos.filter(d =>
+      d.pedidos?.estado === 'En proceso' || d.pedidos?.estado === 'En camino'
+    );
+    // Para rentabilidad: mismo conjunto que ingresos
+    const detallesRentab = detallesPagados;
 
     const now        = new Date();
     const mesActual  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
