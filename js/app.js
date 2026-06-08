@@ -991,7 +991,7 @@ async function loadInventario() {
     });
 
     let q = db.from('prendas')
-      .select('id, numero, nombre, marca, categoria, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, emoji, fecha_adquisicion, vendedoras(nombre), fotos_prendas(url)')
+      .select('id, numero, nombre, marca, categoria, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, emoji, fecha_adquisicion, vendedoras(nombre), fotos_prendas(url, orden)')
       .order('created_at', { ascending: false });
 
     if (_invFilter === 'disponible') q = q.eq('disponible', true).eq('baja', false);
@@ -1033,7 +1033,7 @@ async function loadInventario() {
           </tr></thead>
           <tbody>
             ${prendas.map(p => {
-              const foto = p.fotos_prendas?.[0]?.url;
+              const foto = (p.fotos_prendas || []).sort((a,b)=>(a.orden??0)-(b.orden??0))[0]?.url;
               return `<tr>
                 <td>${foto
                   ? `<img src="${foto}" class="table-thumb" alt="">`
@@ -1667,6 +1667,7 @@ async function guardarEditPrenda(id, hasExtras) {
 
     // Update orden for surviving existing fotos (respects drag & drop reordering)
     const surviving = _editFotosExistentes.filter(f => !f.deleted);
+    console.log('[fotos orden] guardando:', surviving.map((f, i) => ({ id: f.id, orden: i, url: f.url.slice(-30) })));
     for (let oIdx = 0; oIdx < surviving.length; oIdx++) {
       await db.from('fotos_prendas').update({ orden: oIdx }).eq('id', surviving[oIdx].id);
     }
@@ -2044,7 +2045,7 @@ async function renderDetalleVisionaria(vendedoraId) {
       db.from('vendedoras').select('id, nombre, nivel, telefono, email, credito, foto_url, created_at').eq('id', vendedoraId).single(),
       db.from('visionaria_stats').select('*').eq('vendedora_id', vendedoraId).maybeSingle(),
       db.from('ventas').select('monto, fecha, created_at').eq('vendedora_id', vendedoraId).gte('fecha', primerDiaMes).order('fecha', { ascending: false }),
-      db.from('inventario_vendedoras').select('estado, prendas(id, nombre, numero, precio_costo, fotos_prendas(url))').eq('vendedora_id', vendedoraId),
+      db.from('inventario_vendedoras').select('estado, prendas(id, nombre, numero, precio_costo, fotos_prendas(url, orden))').eq('vendedora_id', vendedoraId),
       db.from('clientes').select('id, nombre, telefono').eq('vendedora_id', vendedoraId).order('nombre'),
     ]);
 
@@ -2119,7 +2120,7 @@ async function renderDetalleVisionaria(vendedoraId) {
             ? '<p class="text-muted" style="padding:12px 0;font-size:0.85rem">Sin prendas en inventario.</p>'
             : `<div class="vis-inv-grid">${prendasActivas.map(i => {
                 const p = i.prendas || {};
-                const foto = p.fotos_prendas?.[0]?.url;
+                const foto = (p.fotos_prendas||[]).sort((a,b)=>(a.orden??0)-(b.orden??0))[0]?.url;
                 return `<div class="vis-inv-card">
                   ${foto ? `<img src="${foto}" alt="">` : `<div class="vis-inv-thumb-empty">👚</div>`}
                   <div class="vis-inv-name">${p.nombre || '—'}</div>
@@ -2133,7 +2134,7 @@ async function renderDetalleVisionaria(vendedoraId) {
           <div class="vis-section-title">Prendas prestadas (${prendasPrestadas.length})</div>
           <div class="vis-inv-grid">${prendasPrestadas.map(i => {
             const p = i.prendas || {};
-            const foto = p.fotos_prendas?.[0]?.url;
+            const foto = (p.fotos_prendas||[]).sort((a,b)=>(a.orden??0)-(b.orden??0))[0]?.url;
             return `<div class="vis-inv-card vis-inv-card--prest">
               ${foto ? `<img src="${foto}" alt="">` : `<div class="vis-inv-thumb-empty">👗</div>`}
               <div class="vis-inv-name">${p.nombre || '—'}</div>
