@@ -2381,60 +2381,104 @@ async function renderFinanciero() {
   main.innerHTML = `<div class="fin-loading"><div class="spinner"></div> Calculando resumen…</div>`;
 
   try {
-    const [ventasR, abonosR, pedidosR, vendedorasR, clientesR, prendasR, gastosR, detallesR] = await Promise.all([
-      db.from('ventas').select('monto, fecha, created_at, vendedoras(nombre)'),
-      db.from('abonos').select('monto, fecha, created_at'),
+    const [detallesR, pedidosR, vendedorasR, clientesR, prendasR, gastosR] = await Promise.all([
+      db.from('detalle_pedidos').select('precio, pedidos(id, estado, fecha, created_at, vendedora_id, vendedoras(nombre)), prendas(precio_costo, numero, marca, fecha_adquisicion)'),
       db.from('pedidos').select('estado, created_at'),
       db.from('vendedoras').select('id, nombre, credito, nivel'),
       db.from('clientes').select('id, vendedora_id'),
       db.from('prendas').select('disponible, baja'),
       db.from('gastos').select('monto, mes, anio, categoria'),
-      db.from('detalle_pedidos').select('precio, prendas(precio_costo, numero, marca, fecha_adquisicion), pedidos(fecha, estado)'),
     ]);
 
-    // Log de errores individuales — silenciados por || [] sin esto
-    [['ventas',ventasR],['abonos',abonosR],['pedidos',pedidosR],
-     ['vendedoras',vendedorasR],['clientes',clientesR],['prendas',prendasR],
-     ['gastos',gastosR],['detalle_pedidos',detallesR]
-    ].forEach(([nombre, r]) => {
-      if (r.error) console.error(`[financiero] error en ${nombre}:`, r.error.message);
-    });
+    [['detalle_pedidos',detallesR],['pedidos',pedidosR],['vendedoras',vendedorasR],
+     ['clientes',clientesR],['prendas',prendasR],['gastos',gastosR],
+    ].forEach(([n, r]) => { if (r.error) console.error(`[financiero] error en ${n}:`, r.error.message); });
 
-    const ventas     = ventasR.data    || [];
-    const abonos     = abonosR.data    || [];
-    const pedidos    = pedidosR.data   || [];
-    const vendedoras = vendedorasR.data|| [];
-    const clientes   = clientesR.data  || [];
-    const prendas    = prendasR.data   || [];
-    const gastosFin  = gastosR.data    || [];
-    const detallesTodos = detallesR.data || [];
-    const detalles = detallesTodos.filter(d => d.pedidos?.estado === 'Pagado' || d.pedidos?.estado === 'Entregado');
+    const detallesTodos = detallesR.data  || [];
+    const pedidos       = pedidosR.data   || [];
+    const vendedoras    = vendedorasR.data || [];
+    const clientes      = clientesR.data  || [];
+    const prendas       = prendasR.data   || [];
+    const gastosFin     = gastosR.data    || [];
+
+    // ── Ingresos ZETINA: price_vendedora = detalle_pedidos.precio ──────────────
+    const detallesPagados    = detallesTodos.filter(d => d.pedidos?.estado === 'Pagado');
+    const detallesPorCobrar  = detallesTodos.filter(d =>
+      d.pedidos?.estado === 'Entregado' || d.pedidos?.estado === 'En camino' || d.pedidos?.estado === 'En proceso'
+    );
+    // Para rentabilidad: pagados + entregados
+    const detallesRentab = detallesTodos.filter(d =>
+      d.pedidos?.estado === 'Pagado' || d.pedidos?.estado === 'Entregado'
+    );
+
+    const now        = new Date();
+    const mesActual  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const mesNum     = now.getMonth() + 1;
+    const anioNum    = now.getFullYear();
+
+    const _fechaPedido = d => (d.pedidos?.fecha || d.pedidos?.created_at || '').slice(0, 7);
+
+    const ingresosHistoricos = detallesPagados.reduce((s, d) => s + (+d.precio || 0), 0);
+    const ingresosMes        = detallesPagados
+      .filter(d => _fechaPedido(d) === mesActual)
+      .reduce((s, d) => s + (+d.precio || 0), 0);
+    const porCobrar          = detallesPorCobrar.reduce((s, d) => s + (+d.precio || 0), 0);
+
+    // Mejor mes histórico
+    const ingresosPorMes = {};
+    detallesPagados.forEach(d => {
+      const mes = _fechaPedido(d);
+      if (mes) ingresosPorMes[mes] = (ingresosPorMes[mes] || 0) + (+d.precio || 0);
+    });
+    const mejorMesEntry = Object.entries(ingresosPorMes).sort((a, b) => b[1] - a[1])[0];
+    const mejorMesLabel = mejorMesEntry
+      ? (() => { const [y,m] = mejorMesEntry[0].split('-'); return `${['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][+m-1]} ${y}`; })()
+      : '—';
+
+    // ── Gastos ─────────────────────────────────────────────────────────────────
+    const gastosMesArr         = gastosFin.filter(g => g.mes === mesNum && g.anio === anioNum);
+    const totalGastosMes       = gastosMesArr.reduce((s, g) => s + (+g.monto || 0), 0);
+    const totalGastosHistorico = gastosFin.reduce((s, g) => s + (+g.monto || 0), 0);
+    const gananciaNeta         = ingresosMes - totalGastosMes;
 
     console.log('[financiero] datos:', {
-      ventas: ventas.length, abonos: abonos.length, pedidos: pedidos.length,
-      vendedoras: vendedoras.length, clientes: clientes.length,
-      prendas: prendas.length, gastos: gastosFin.length, detalles: detalles.length,
+      detallesPagados: detallesPagados.length, detallesPorCobrar: detallesPorCobrar.length,
+      ingresosMes, ingresosHistoricos, porCobrar, gananciaNeta,
     });
 
-    // Margen por prefijo de categoría
+    // ── Pedidos por estado ─────────────────────────────────────────────────────
+    const pedCounts = Object.fromEntries(ESTADOS_PEDIDO.map(e => [e, 0]));
+    pedidos.forEach(p => { if (pedCounts[p.estado] !== undefined) pedCounts[p.estado]++; });
+
+    const dispCount = prendas.filter(p =>  p.disponible && !p.baja).length;
+    const vendCount = prendas.filter(p => !p.disponible && !p.baja).length;
+
+    // ── Top visionarias por ingresos a ZETINA ──────────────────────────────────
+    const ingresosPorVis = {};
+    detallesPagados.forEach(d => {
+      const nombre = d.pedidos?.vendedoras?.nombre || 'Sin asignar';
+      ingresosPorVis[nombre] = (ingresosPorVis[nombre] || 0) + (+d.precio || 0);
+    });
+    const topVendedoras = Object.entries(ingresosPorVis).sort((a, b) => b[1] - a[1]).slice(0, 8);
+
+    // ── Rentabilidad (margen y rotación) ───────────────────────────────────────
     const PREFIJOS_CAT = { SAL: 'Saldo', RAC: 'Rack calidad', JOY: 'Joyería', INT: 'Interior' };
     const margenCat = {};
     Object.keys(PREFIJOS_CAT).forEach(p => { margenCat[p] = { total: 0, count: 0 }; });
-    detalles.forEach(d => {
+    detallesRentab.forEach(d => {
       if (!d.prendas) return;
       const pf = (d.prendas.numero || '').slice(0, 3).toUpperCase();
       if (!margenCat[pf]) return;
-      const pv = +d.precio || 0; const pc = +d.prendas.precio_costo || 0;
+      const pv = +d.precio || 0, pc = +d.prendas.precio_costo || 0;
       if (pv <= 0) return;
       margenCat[pf].total += (pv - pc) / pv * 100;
       margenCat[pf].count++;
     });
 
-    // Top marcas por margen
     const margenMarca = {};
-    detalles.forEach(d => {
+    detallesRentab.forEach(d => {
       if (!d.prendas?.marca) return;
-      const pv = +d.precio || 0; const pc = +d.prendas.precio_costo || 0;
+      const pv = +d.precio || 0, pc = +d.prendas.precio_costo || 0;
       if (pv <= 0) return;
       const m = d.prendas.marca;
       if (!margenMarca[m]) margenMarca[m] = { total: 0, count: 0 };
@@ -2445,10 +2489,9 @@ async function renderFinanciero() {
       .map(([m, d]) => ({ marca: m, margen: d.total / d.count, count: d.count }))
       .sort((a, b) => b.margen - a.margen).slice(0, 5);
 
-    // Rotación por categoría
     const rotCat = {};
     Object.keys(PREFIJOS_CAT).forEach(p => { rotCat[p] = { total: 0, count: 0 }; });
-    detalles.forEach(d => {
+    detallesRentab.forEach(d => {
       if (!d.prendas?.fecha_adquisicion || !d.pedidos?.fecha) return;
       const pf = (d.prendas.numero || '').slice(0, 3).toUpperCase();
       if (!rotCat[pf]) return;
@@ -2457,62 +2500,29 @@ async function renderFinanciero() {
     });
     const maxMargen = Math.max(...Object.values(margenCat).map(d => d.count > 0 ? d.total / d.count : 0), 1);
 
-    const totalVentas  = ventas.reduce((s, v) => s + (v.monto || 0), 0);
-    const totalAbonos  = abonos.reduce((s, a) => s + (a.monto || 0), 0);
-    const porCobrar    = Math.max(0, totalVentas - totalAbonos);
-
-    const now       = new Date();
-    const mesActual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const ventasMes = ventas.filter(v => (v.fecha || v.created_at || '').slice(0, 7) === mesActual);
-    const abonosMes = abonos.filter(a => (a.fecha || a.created_at || '').slice(0, 7) === mesActual);
-    const totalVentasMes  = ventasMes.reduce((s, v) => s + (v.monto || 0), 0);
-    const totalAbonosMes  = abonosMes.reduce((s, a) => s + (a.monto || 0), 0);
-
-    const mesNum  = now.getMonth() + 1;
-    const anioNum = now.getFullYear();
-    const gastosMesArr       = gastosFin.filter(g => g.mes === mesNum && g.anio === anioNum);
-    const totalGastosMes     = gastosMesArr.reduce((s, g) => s + (+g.monto || 0), 0);
-    const totalGastosHistorico = gastosFin.reduce((s, g) => s + (+g.monto || 0), 0);
-    const utilidadNeta       = totalVentasMes - totalGastosMes;
-
-    const pedCounts = Object.fromEntries(ESTADOS_PEDIDO.map(e => [e, 0]));
-    pedidos.forEach(p => { if (pedCounts[p.estado] !== undefined) pedCounts[p.estado]++; });
-
-    const dispCount = prendas.filter(p =>  p.disponible && !p.baja).length;
-    const vendCount = prendas.filter(p => !p.disponible && !p.baja).length;
-
-    // Ventas por vendedora
-    const ventasMap = {};
-    ventas.forEach(v => {
-      const nombre = v.vendedoras?.nombre || 'Sin asignar';
-      ventasMap[nombre] = (ventasMap[nombre] || 0) + (v.monto || 0);
-    });
-    const topVendedoras = Object.entries(ventasMap)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 8);
-
+    // ── HTML ───────────────────────────────────────────────────────────────────
     main.innerHTML = `
-      <!-- KPIs principales -->
+      <!-- KPIs ingresos ZETINA -->
       <div class="fin-grid">
         <div class="kpi-card kpi-accent">
-          <div class="kpi-label">Total vendido (histórico)</div>
-          <div class="kpi-value">${formatPeso(totalVentas)}</div>
-          <div class="kpi-sub">${ventas.length} ventas registradas</div>
+          <div class="kpi-label">Ingresos del mes</div>
+          <div class="kpi-value">${formatPeso(ingresosMes)}</div>
+          <div class="kpi-sub">${detallesPagados.filter(d => _fechaPedido(d) === mesActual).length} pedidos pagados este mes</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">Total cobrado</div>
-          <div class="kpi-value">${formatPeso(totalAbonos)}</div>
-          <div class="kpi-sub">${abonos.length} abonos recibidos</div>
+          <div class="kpi-label">Ingresos históricos</div>
+          <div class="kpi-value">${formatPeso(ingresosHistoricos)}</div>
+          <div class="kpi-sub">${detallesPagados.length} artículos pagados</div>
         </div>
         <div class="kpi-card kpi-warning">
           <div class="kpi-label">Por cobrar</div>
           <div class="kpi-value">${formatPeso(porCobrar)}</div>
-          <div class="kpi-sub">Saldo pendiente</div>
+          <div class="kpi-sub">${detallesPorCobrar.length} artículos pendientes de pago</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">Ventas este mes</div>
-          <div class="kpi-value">${formatPeso(totalVentasMes)}</div>
-          <div class="kpi-sub">Abonos mes: ${formatPeso(totalAbonosMes)}</div>
+          <div class="kpi-label">Mejor mes</div>
+          <div class="kpi-value" style="font-size:1.3rem">${mejorMesLabel}</div>
+          <div class="kpi-sub">${mejorMesEntry ? formatPeso(mejorMesEntry[1]) : '—'}</div>
         </div>
       </div>
 
@@ -2523,10 +2533,10 @@ async function renderFinanciero() {
           <div class="kpi-value">${formatPeso(totalGastosMes)}</div>
           <div class="kpi-sub">${gastosMesArr.length} gastos registrados</div>
         </div>
-        <div class="kpi-card ${utilidadNeta >= 0 ? 'kpi-accent' : 'kpi-warning'}">
-          <div class="kpi-label">Utilidad neta del mes</div>
-          <div class="kpi-value">${formatPeso(utilidadNeta)}</div>
-          <div class="kpi-sub">Ventas − Gastos</div>
+        <div class="kpi-card ${gananciaNeta >= 0 ? 'kpi-accent' : 'kpi-warning'}">
+          <div class="kpi-label">Ganancia neta del mes</div>
+          <div class="kpi-value">${formatPeso(gananciaNeta)}</div>
+          <div class="kpi-sub">Ingresos − Gastos</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-label">Gastos históricos</div>
@@ -2535,7 +2545,7 @@ async function renderFinanciero() {
         </div>
       </div>
 
-      <!-- KPIs secundarios -->
+      <!-- KPIs operacionales -->
       <div class="fin-grid fin-grid-3">
         <div class="kpi-card">
           <div class="kpi-label">Visionarias</div>
@@ -2551,32 +2561,28 @@ async function renderFinanciero() {
         </div>
       </div>
 
-      <!-- Pedidos + Ranking -->
+      <!-- Pedidos + Top visionarias -->
       <div class="fin-row">
         <div class="fin-card">
           <h3 class="fin-card-title">Pedidos por estado</h3>
           <div class="pedidos-estados">
             ${ESTADOS_PEDIDO.map(e => {
-              const barClass = e === 'Entregado' ? 'bar-success' : e === 'En camino' ? 'bar-info' : '';
-              const badgeClass = e === 'Entregado' ? 'success' : e === 'En camino' ? 'info' : 'warning';
+              const barClass   = e === 'Entregado' ? 'bar-success' : e === 'En camino' ? 'bar-info' : '';
+              const badgeClass = e === 'Entregado' ? 'success'     : e === 'En camino' ? 'info'    : 'warning';
               const pct = pedidos.length ? (pedCounts[e] / pedidos.length * 100) : 0;
-              return `
-                <div class="estado-row">
-                  <span class="badge badge-${badgeClass}">${e}</span>
-                  <div class="estado-bar-wrap">
-                    <div class="estado-bar ${barClass}" style="width:${pct}%"></div>
-                  </div>
-                  <span class="estado-count">${pedCounts[e]}</span>
-                </div>`;
+              return `<div class="estado-row">
+                <span class="badge badge-${badgeClass}">${e}</span>
+                <div class="estado-bar-wrap"><div class="estado-bar ${barClass}" style="width:${pct}%"></div></div>
+                <span class="estado-count">${pedCounts[e]}</span>
+              </div>`;
             }).join('')}
           </div>
         </div>
-
         <div class="fin-card">
-          <h3 class="fin-card-title">Top visionarias por ventas</h3>
+          <h3 class="fin-card-title">Top visionarias — ingresos a ZETINA</h3>
           <div class="vendedoras-rank">
             ${topVendedoras.length === 0
-              ? '<p class="text-muted">Sin datos de ventas aún.</p>'
+              ? '<p class="text-muted">Sin pedidos pagados aún.</p>'
               : topVendedoras.map(([nombre, monto], i) => `
                 <div class="rank-row">
                   <span class="rank-num">${i + 1}</span>
@@ -2611,7 +2617,6 @@ async function renderFinanciero() {
             }).join('')}
           </div>
         </div>
-
         <div class="fin-card">
           <h3 class="fin-card-title">Marcas más rentables</h3>
           ${!topMarcas.length
