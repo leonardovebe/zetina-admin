@@ -805,6 +805,7 @@ async function handlePrendaSubmit(e) {
 let _invFilter = 'todas';
 let _editFotosExistentes = []; // [{id, url, deleted}]
 let _editFotosNuevas     = []; // File[]
+let _editFotosEtiqueta   = []; // File[] — solo para IA, no se guardan
 let _invSearch = '';
 let _invDebounce;
 
@@ -1033,7 +1034,8 @@ async function abrirEditarPrenda(id) {
   }
 
   _editFotosExistentes = (p.fotos_prendas || []).map(f => ({ id: f.id, url: f.url, deleted: false }));
-  _editFotosNuevas = [];
+  _editFotosNuevas   = [];
+  _editFotosEtiqueta = [];
 
   const estadoVal = p.baja ? 'baja' : p.disponible ? 'disponible' : 'vendida';
   const desc = parseDesc(p.descripcion);
@@ -1046,12 +1048,42 @@ async function abrirEditarPrenda(id) {
     <form id="editPrendaForm" class="modal-form">
 
       <div class="edit-section">
-        <div class="form-section-title">Fotos</div>
+        <div class="form-section-title">
+          Fotos de prenda
+          <span class="foto-section-badge">Se publican en el catálogo</span>
+        </div>
         <div id="editFotosGrid" class="edit-fotos-grid"></div>
         <label class="btn btn-outline btn-sm edit-add-foto-label">
           + Agregar fotos
           <input type="file" id="editFotosInput" accept="image/*" multiple hidden>
         </label>
+      </div>
+
+      <div class="edit-section">
+        <div class="form-section-title">
+          Fotos de etiqueta
+          <span class="foto-section-badge foto-section-badge--ia">Solo para IA</span>
+        </div>
+        <div class="photo-upload-area photo-upload-area--etiqueta" id="editEtiquetaArea" style="min-height:100px">
+          <input type="file" id="editEtiquetasInput" accept="image/*" multiple hidden>
+          <div class="photo-upload-placeholder" id="editEtiquetaPlaceholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:28px;height:28px;color:var(--text-muted)">
+              <rect x="3" y="6" width="18" height="13" rx="2"/>
+              <path d="M3 10h18M8 6V4M16 6V4"/>
+            </svg>
+            <p style="font-size:0.8rem;color:var(--text-muted)">Sube fotos de etiqueta para activar la IA</p>
+          </div>
+          <div class="photo-previews" id="editEtiquetaPreviews"></div>
+        </div>
+        <div class="ia-btn-row hidden" id="editIaBtnRow" style="margin-top:10px">
+          <button type="button" id="btnEditGenerarIA" class="btn-ia">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;flex-shrink:0">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+            </svg>
+            Generar con IA
+          </button>
+          <span class="ia-hint">Rellena nombre, marca, talla y descripción</span>
+        </div>
       </div>
 
       <div class="edit-section">
@@ -1228,6 +1260,23 @@ async function abrirEditarPrenda(id) {
     e.target.value = '';
   });
 
+  // Fotos de etiqueta
+  const etiquetaArea = document.getElementById('editEtiquetaArea');
+  etiquetaArea?.addEventListener('click', () => document.getElementById('editEtiquetasInput').click());
+  etiquetaArea?.addEventListener('dragover', e => { e.preventDefault(); etiquetaArea.classList.add('drag-over'); });
+  etiquetaArea?.addEventListener('dragleave', () => etiquetaArea.classList.remove('drag-over'));
+  etiquetaArea?.addEventListener('drop', e => {
+    e.preventDefault();
+    etiquetaArea.classList.remove('drag-over');
+    _addEditEtiquetas(e.dataTransfer.files);
+  });
+  document.getElementById('editEtiquetasInput')?.addEventListener('change', e => {
+    _addEditEtiquetas(e.target.files);
+    e.target.value = '';
+  });
+
+  document.getElementById('btnEditGenerarIA')?.addEventListener('click', handleEditGenerarIA);
+
   document.getElementById('editPrendaForm').addEventListener('submit', e => {
     e.preventDefault();
     guardarEditPrenda(id, hasExtras);
@@ -1236,6 +1285,113 @@ async function abrirEditarPrenda(id) {
   // Auto-cálculo de precios en tiempo real
   document.getElementById('ePrecioMin')?.addEventListener('input', _calcularPreciosModal);
   if (hasExtras) document.getElementById('eId')?.addEventListener('input', _calcularPreciosModal);
+}
+
+function _addEditEtiquetas(files) {
+  const valid = Array.from(files).filter(f => f.type.startsWith('image/') && f.size <= 5 * 1024 * 1024);
+  if (valid.length < files.length) showToast('Algunas fotos superan 5 MB y fueron ignoradas.', 'info');
+  _editFotosEtiqueta.push(...valid);
+  _renderEditEtiquetas();
+}
+
+function _renderEditEtiquetas() {
+  const container   = document.getElementById('editEtiquetaPreviews');
+  const placeholder = document.getElementById('editEtiquetaPlaceholder');
+  const btnRow      = document.getElementById('editIaBtnRow');
+  if (!container) return;
+  if (_editFotosEtiqueta.length === 0) {
+    if (placeholder) placeholder.style.display = '';
+    container.innerHTML = '';
+    if (btnRow) btnRow.classList.add('hidden');
+    return;
+  }
+  if (placeholder) placeholder.style.display = 'none';
+  if (btnRow) btnRow.classList.remove('hidden');
+  container.innerHTML = _editFotosEtiqueta.map((f, i) => `
+    <div class="photo-preview-item">
+      <img src="${URL.createObjectURL(f)}" alt="${f.name}">
+      <button type="button" class="photo-remove-btn" data-i="${i}">×</button>
+    </div>`).join('');
+  container.querySelectorAll('.photo-remove-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      _editFotosEtiqueta.splice(+btn.dataset.i, 1);
+      _renderEditEtiquetas();
+    });
+  });
+}
+
+async function handleEditGenerarIA() {
+  const btn = document.getElementById('btnEditGenerarIA');
+  if (!btn) return;
+  btn.classList.add('loading');
+  btn.disabled = true;
+  const originalHTML = btn.innerHTML;
+  btn.innerHTML = `<span class="spinner-sm"></span> Analizando…`;
+
+  const sessionId = Date.now().toString(36);
+  const tempPaths = [];
+
+  try {
+    // Fotos de prenda existentes (ya tienen URL pública, no re-subir)
+    const images = _editFotosExistentes
+      .filter(f => !f.deleted)
+      .map(f => ({ url: f.url, type: 'prenda' }));
+
+    // Subir fotos de etiqueta a temp
+    for (let i = 0; i < _editFotosEtiqueta.length; i++) {
+      const blob = await _compressImage(_editFotosEtiqueta[i]);
+      const path = `ia-temp/${sessionId}/etiqueta-${i}.jpg`;
+      const { data, error } = await db.storage.from('prenda-fotos').upload(path, blob, { contentType: 'image/jpeg' });
+      if (error) throw error;
+      tempPaths.push(data.path);
+      const { data: u } = db.storage.from('prenda-fotos').getPublicUrl(data.path);
+      images.push({ url: u.publicUrl, type: 'etiqueta' });
+    }
+
+    if (!images.some(i => i.type === 'etiqueta')) throw new Error('Sube al menos una foto de etiqueta');
+
+    const idVal  = (document.getElementById('eId')?.value || '').trim().toUpperCase();
+    const categoriaLabels = { SAL: 'Saldo', RAC: 'Ropa alta calidad', JOY: 'Joyería/Accesorios', INT: 'Ropa interior' };
+    const contexto = {
+      categoria:     categoriaLabels[idVal.slice(0, 3)] || null,
+      tallaReal:     document.getElementById('eTallaReal')?.value.trim()    || null,
+      precioMin:     parseFloat(document.getElementById('ePrecioMin')?.value) || null,
+      precioMax:     parseFloat(document.getElementById('ePrecioMax')?.value) || null,
+      observaciones: null,
+    };
+
+    const res = await fetch('/api/generar-descripcion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ images, contexto }),
+    });
+    if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || `Error ${res.status}`); }
+
+    const r = await res.json();
+
+    if (r.nombre)          document.getElementById('eNombre').value          = r.nombre;
+    if (r.marca)           document.getElementById('eMarca').value           = r.marca;
+    if (r.talla)           document.getElementById('eTallaEtiqueta').value   = r.talla;
+    if (r.color)           document.getElementById('eColor').value           = r.color;
+    if (r.material)        document.getElementById('eMaterial').value        = r.material;
+    if (r.composicion)     document.getElementById('eComposicion').value     = r.composicion;
+    if (r.cuidado)         document.getElementById('eCuidado').value         = r.cuidado;
+    if (r.por_que_vale)    document.getElementById('ePorQueVale').value      = r.por_que_vale;
+    if (r.cliente_ideal)   document.getElementById('eClienteIdeal').value    = r.cliente_ideal;
+    if (r.como_presentarla) document.getElementById('eComoPresentarla').value = r.como_presentarla;
+
+    _editFotosEtiqueta = [];
+    _renderEditEtiquetas();
+    showToast('¡Campos llenados con IA! Revisa antes de guardar.', 'success');
+  } catch (err) {
+    showToast(err.message || 'Error al conectar con la IA', 'error');
+  } finally {
+    if (tempPaths.length) db.storage.from('prenda-fotos').remove(tempPaths).catch(() => {});
+    btn.classList.remove('loading');
+    btn.innerHTML = originalHTML;
+    btn.disabled = false;
+  }
 }
 
 function _renderEditFotos() {
