@@ -2392,6 +2392,14 @@ async function renderFinanciero() {
       db.from('detalle_pedidos').select('precio, prendas(precio_costo, numero, marca, fecha_adquisicion), pedidos(fecha, estado)'),
     ]);
 
+    // Log de errores individuales — silenciados por || [] sin esto
+    [['ventas',ventasR],['abonos',abonosR],['pedidos',pedidosR],
+     ['vendedoras',vendedorasR],['clientes',clientesR],['prendas',prendasR],
+     ['gastos',gastosR],['detalle_pedidos',detallesR]
+    ].forEach(([nombre, r]) => {
+      if (r.error) console.error(`[financiero] error en ${nombre}:`, r.error.message);
+    });
+
     const ventas     = ventasR.data    || [];
     const abonos     = abonosR.data    || [];
     const pedidos    = pedidosR.data   || [];
@@ -2401,6 +2409,12 @@ async function renderFinanciero() {
     const gastosFin  = gastosR.data    || [];
     const detallesTodos = detallesR.data || [];
     const detalles = detallesTodos.filter(d => d.pedidos?.estado === 'Pagado' || d.pedidos?.estado === 'Entregado');
+
+    console.log('[financiero] datos:', {
+      ventas: ventas.length, abonos: abonos.length, pedidos: pedidos.length,
+      vendedoras: vendedoras.length, clientes: clientes.length,
+      prendas: prendas.length, gastos: gastosFin.length, detalles: detalles.length,
+    });
 
     // Margen por prefijo de categoría
     const PREFIJOS_CAT = { SAL: 'Saldo', RAC: 'Rack calidad', JOY: 'Joyería', INT: 'Interior' };
