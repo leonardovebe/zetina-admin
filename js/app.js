@@ -1146,8 +1146,8 @@ async function abrirEditarPrenda(id) {
 
   // Try fetching with optional columns (numero, categoria); fall back if they don't exist yet
   let p, hasExtras = true;
-  const fullSel = 'id, nombre, marca, color, categoria, departamento, numero, emoji, gradiente, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
-  const safeSel = 'id, nombre, marca, color, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url)';
+  const fullSel = 'id, nombre, marca, color, categoria, departamento, numero, emoji, gradiente, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url, orden)';
+  const safeSel = 'id, nombre, marca, color, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url, orden)';
 
   let { data, error } = await db.from('prendas').select(fullSel).eq('id', id).single();
   if (error && error.message.includes('does not exist')) {
@@ -1161,7 +1161,9 @@ async function abrirEditarPrenda(id) {
     p = data;
   }
 
-  _editFotosExistentes = (p.fotos_prendas || []).map(f => ({ id: f.id, url: f.url, deleted: false }));
+  _editFotosExistentes = (p.fotos_prendas || [])
+    .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))
+    .map(f => ({ id: f.id, url: f.url, deleted: false }));
   _editFotosNuevas   = [];
   _editFotosEtiqueta = [];
 
