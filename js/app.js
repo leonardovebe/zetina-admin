@@ -1208,6 +1208,11 @@ async function abrirEditarPrenda(id) {
           </div>
           <div class="photo-previews" id="editEtiquetaPreviews"></div>
         </div>
+        <div class="form-group" style="margin-top:10px">
+          <label style="font-size:0.8rem;color:var(--text-muted)">Observaciones para la IA</label>
+          <textarea id="eObservaciones" rows="2" style="resize:vertical;font-size:0.85rem"
+            placeholder="Agrega notas sobre la prenda que ayuden a la IA a generar una mejor descripción. Ej: la tela es muy suave, el corte es generoso, ideal para ocasiones formales...">${escHtml(p.observaciones)}</textarea>
+        </div>
         <div class="ia-btn-row hidden" id="editIaBtnRow" style="margin-top:10px">
           <button type="button" id="btnEditGenerarIA" class="btn-ia">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;flex-shrink:0">
@@ -1228,7 +1233,7 @@ async function abrirEditarPrenda(id) {
           </div>` : ''}
           <div class="form-group">
             <label>Nombre *</label>
-            <input type="text" id="eNombre" required value="${p.nombre || ''}">
+            <input type="text" id="eNombre" value="${p.nombre || ''}" placeholder="Se puede dejar vacío y generar con IA">
           </div>
           <div class="form-group">
             <label>Marca</label>
@@ -1504,7 +1509,7 @@ async function handleEditGenerarIA() {
       tallaReal:     document.getElementById('eTallaReal')?.value.trim()    || null,
       precioMin:     parseFloat(document.getElementById('ePrecioMin')?.value) || null,
       precioMax:     parseFloat(document.getElementById('ePrecioMax')?.value) || null,
-      observaciones: null,
+      observaciones: document.getElementById('eObservaciones')?.value.trim() || null,
     };
 
     const res = await fetch('/api/generar-descripcion', {
@@ -1641,6 +1646,7 @@ async function guardarEditPrenda(id, hasExtras) {
       disponible:     estadoVal === 'disponible',
       baja:           estadoVal === 'baja',
       descripcion:    Object.values(_eDesc).some(Boolean) ? JSON.stringify(_eDesc) : null,
+      observaciones:  document.getElementById('eObservaciones')?.value.trim() || null,
     };
     if (hasExtras) {
       payload.numero    = document.getElementById('eId').value.trim()    || null;
