@@ -1053,10 +1053,15 @@ async function abrirEditarPrenda(id) {
           <span class="foto-section-badge">Se publican en el catálogo</span>
         </div>
         <div id="editFotosGrid" class="edit-fotos-grid"></div>
-        <label class="btn btn-outline btn-sm edit-add-foto-label">
-          + Agregar fotos
+        <div class="photo-upload-area" id="editPrendaDropArea" style="min-height:90px;margin-top:8px">
           <input type="file" id="editFotosInput" accept="image/*" multiple hidden>
-        </label>
+          <div class="photo-upload-placeholder" id="editPrendaDropPlaceholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:24px;height:24px;color:var(--text-muted)">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+            </svg>
+            <p style="font-size:0.82rem">Arrastra fotos aquí o <span style="color:var(--purple);text-decoration:underline;cursor:pointer">toca para seleccionar</span></p>
+          </div>
+        </div>
       </div>
 
       <div class="edit-section">
@@ -1252,11 +1257,24 @@ async function abrirEditarPrenda(id) {
     });
   }
 
-  document.getElementById('editFotosInput').addEventListener('change', e => {
-    const valid = Array.from(e.target.files).filter(f => f.type.startsWith('image/') && f.size <= 5 * 1024 * 1024);
-    if (valid.length < e.target.files.length) showToast('Algunas fotos superan 5 MB y fueron ignoradas.', 'info');
+  // Zona de drop para fotos de prenda
+  const prendaDropArea = document.getElementById('editPrendaDropArea');
+  const _addEditFotoNuevas = files => {
+    const valid = Array.from(files).filter(f => f.type.startsWith('image/') && f.size <= 5 * 1024 * 1024);
+    if (valid.length < files.length) showToast('Algunas fotos superan 5 MB y fueron ignoradas.', 'info');
     _editFotosNuevas = [..._editFotosNuevas, ...valid];
     _renderEditFotos();
+  };
+  prendaDropArea?.addEventListener('click',     () => document.getElementById('editFotosInput').click());
+  prendaDropArea?.addEventListener('dragover',  e  => { e.preventDefault(); prendaDropArea.classList.add('drag-over'); });
+  prendaDropArea?.addEventListener('dragleave', () => prendaDropArea.classList.remove('drag-over'));
+  prendaDropArea?.addEventListener('drop',      e  => {
+    e.preventDefault();
+    prendaDropArea.classList.remove('drag-over');
+    _addEditFotoNuevas(e.dataTransfer.files);
+  });
+  document.getElementById('editFotosInput')?.addEventListener('change', e => {
+    _addEditFotoNuevas(e.target.files);
     e.target.value = '';
   });
 
