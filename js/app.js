@@ -775,8 +775,28 @@ async function handlePrendaSubmit(e) {
   e.preventDefault();
   const btn = document.getElementById('submitPrendaBtn');
 
-  if (!_numeroValido) {
-    showToast('El ID ya existe. Cambia el número de la prenda.', 'error');
+  // Verificación síncrona del ID — no depende del debounce ni de _numeroValido
+  const numeroVal = document.getElementById('fNumero')?.value.trim();
+  if (!numeroVal) {
+    showToast('El ID de la prenda es obligatorio.', 'error');
+    document.getElementById('fNumero')?.focus();
+    return;
+  }
+  const { count: idCount } = await db
+    .from('prendas')
+    .select('id', { count: 'exact', head: true })
+    .eq('numero', numeroVal);
+  if (idCount > 0) {
+    showToast('Este ID ya existe. Usa un ID diferente.', 'error');
+    document.getElementById('fNumero')?.focus();
+    return;
+  }
+
+  // Verificar que fPrecioCosto tenga valor
+  const costoVal = parseFloat(document.getElementById('fPrecioCosto')?.value);
+  if (!costoVal || costoVal <= 0) {
+    showToast('El Costo ZETINA es obligatorio.', 'error');
+    document.getElementById('fPrecioCosto')?.focus();
     return;
   }
 
