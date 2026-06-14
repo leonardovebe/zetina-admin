@@ -2089,7 +2089,6 @@ async function verDetallePedido(pedidoId) {
     });
   }
 }
-}
 
 async function confirmarPagoPedido(pedidoId, vendedoraId, creditoAplicado, total) {
   try {
