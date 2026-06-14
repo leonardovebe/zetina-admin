@@ -937,21 +937,107 @@ let _editFotosEtiqueta   = []; // File[] — solo para IA, no se guardan
 let _invSearch = '';
 let _invDebounce;
 
+const INV_FILTROS = [
+  { key: 'todas',         label: 'Todas' },
+  { key: 'incompleta',    label: 'Incompleta' },
+  { key: 'lista',         label: 'Lista' },
+  { key: 'publicada',     label: 'Publicada' },
+  { key: 'en_visionaria', label: 'En Visionaria' },
+  { key: 'vendida',       label: 'Vendida' },
+  { key: 'personal',      label: 'Personal' },
+  { key: 'baja',          label: 'De Baja' },
+];
+
+const ESTADOS_FILTRO_MAP = {
+  incompleta:    ['incompleta'],
+  lista:         ['lista'],
+  publicada:     ['publicada'],
+  en_visionaria: ['en_visionaria'],
+  vendida:       ['vendida', 'vendida_asumida'],
+  personal:      ['compra_personal'],
+  baja:          ['baja'],
+};
+
+function calcularEstadoPrenda(p, inv, tieneVenta) {
+  if (p.baja) return 'baja';
+  if (inv) {
+    if (inv.estado === 'personal') return 'compra_personal';
+    if (inv.estado === 'vendido')  return 'vendida';
+    if (inv.estado === 'activo' || inv.estado === 'prestado') {
+      const dias = Math.floor((Date.now() - new Date(inv.fecha_entrega)) / 86400000);
+      return dias >= 15 ? 'vendida_asumida' : 'en_visionaria';
+    }
+  }
+  if (tieneVenta) return 'vendida';
+  if (p.disponible) return 'publicada';
+  const tieneFotos = (p.fotos_prendas?.length || 0) > 0;
+  const tieneDesc  = !!p.descripcion;
+  return (tieneFotos && tieneDesc) ? 'lista' : 'incompleta';
+}
+
+function estadoBadgeNuevo(estado, inv) {
+  const dias = inv?.fecha_entrega
+    ? Math.floor((Date.now() - new Date(inv.fecha_entrega)) / 86400000)
+    : 0;
+  switch (estado) {
+    case 'incompleta':      return '<span class="badge badge-muted">Incompleta</span>';
+    case 'lista':           return '<span class="badge badge-warning">Lista para publicar</span>';
+    case 'publicada':       return '<span class="badge badge-success">Publicada</span>';
+    case 'en_visionaria':   return `<span class="badge badge-visionaria">En Visionaria</span>
+      <div class="inv-info-sub">
+        <span class="inv-vis-nombre">${escHtml(inv?.vendedoras?.nombre || '—')}</span>
+        <span class="inv-dias-badge">Día ${dias + 1} de 15</span>
+      </div>`;
+    case 'vendida':         return '<span class="badge badge-vendida">Vendida</span>';
+    case 'vendida_asumida': return '<span class="badge badge-vendida">Vendida (asumida)</span>';
+    case 'compra_personal': return '<span class="badge badge-personal">Compra Personal</span>';
+    case 'baja':            return '<span class="badge badge-danger">De Baja</span>';
+    default:                return '<span class="badge badge-muted">—</span>';
+  }
+}
+
+function _accionesPrenda(p) {
+  const { estado } = p;
+  const id  = p.id;
+  const nom = escQ(p.nombre);
+  const btns = [`<button class="btn-sm btn-outline" onclick="abrirEditarPrenda('${id}')">Editar</button>`];
+
+  if (estado === 'baja') {
+    btns.push(`<button class="btn-sm btn-outline" onclick="reactivar('${id}')">↑ Reactivar</button>`);
+    btns.push(`<button class="btn-icon btn-danger" title="Eliminar" onclick="deletePrenda('${id}','${nom}')">🗑</button>`);
+    return btns.join('');
+  }
+
+  if (estado === 'incompleta' || estado === 'lista') {
+    btns.push(`<button class="btn-sm btn-outline" onclick="abrirEditarPrenda('${id}')">📷 Fotos</button>`);
+  }
+  if (estado === 'lista') {
+    btns.push(`<button class="btn-sm btn-publish" onclick="publicarPrenda('${id}')">✅ Publicar</button>`);
+  }
+  if (!['vendida','vendida_asumida','en_visionaria','baja'].includes(estado)) {
+    btns.push(`<button class="btn-sm btn-warn" onclick="darBajaConMotivo('${id}','${nom}')">⚠️ Dar de baja</button>`);
+  }
+  if (['incompleta','compra_personal'].includes(estado)) {
+    btns.push(`<button class="btn-icon btn-danger" title="Eliminar" onclick="deletePrenda('${id}','${nom}')">🗑</button>`);
+  }
+  return btns.join('');
+}
+
 async function renderInventario() {
   const main = document.getElementById('sectionContent');
   main.innerHTML = `
     <div class="section-toolbar">
-      <div class="filter-tabs" id="invTabs">
-        ${['todas','disponible','vendido','baja'].map(f => `
-          <button class="filter-tab ${_invFilter === f ? 'active' : ''}" data-f="${f}">
-            ${f.charAt(0).toUpperCase() + f.slice(1)}
+      <div class="filter-tabs" id="invTabs" style="flex-wrap:wrap;gap:4px">
+        ${INV_FILTROS.map(f => `
+          <button class="filter-tab ${_invFilter === f.key ? 'active' : ''}" data-f="${f.key}">
+            ${f.label}
           </button>`).join('')}
       </div>
       <div class="search-box">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
         </svg>
-        <input type="text" id="invSearch" placeholder="Buscar nombre o marca…" value="${_invSearch}">
+        <input type="text" id="invSearch" placeholder="Buscar nombre, marca o ID…" value="${_invSearch}">
       </div>
     </div>
     <div id="invStats" class="stats-row"></div>
@@ -979,46 +1065,70 @@ async function loadInventario() {
   listEl.innerHTML = '<div class="table-loading">Cargando…</div>';
 
   try {
-    const { data: dpDates } = await db
-      .from('detalle_pedidos')
-      .select('prenda_id, pedidos(fecha, estado)');
+    let q = db.from('prendas')
+      .select('id, numero, nombre, marca, categoria, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, motivo_baja, fecha_baja, emoji, fecha_adquisicion, descripcion, fotos_prendas(url, orden)')
+      .order('created_at', { ascending: false });
+
+    if (_invSearch.trim()) {
+      q = q.or(`nombre.ilike.%${_invSearch}%,marca.ilike.%${_invSearch}%,numero.ilike.%${_invSearch}%`);
+    }
+
+    const [prendasR, invVisR, ventasR, dpDatesR] = await Promise.all([
+      q,
+      db.from('inventario_vendedoras')
+        .select('prenda_id, estado, fecha_entrega, vendedoras(nombre)')
+        .order('created_at', { ascending: false }),
+      db.from('ventas').select('prenda_id').not('prenda_id', 'is', null),
+      db.from('detalle_pedidos').select('prenda_id, pedidos(fecha, estado)'),
+    ]);
+
+    if (prendasR.error) throw prendasR.error;
+    const prendas = prendasR.data || [];
+
+    // Inventario visionarias: most recent per prenda
+    const invVisMap = {};
+    (invVisR.data || []).forEach(iv => {
+      if (!invVisMap[iv.prenda_id]) invVisMap[iv.prenda_id] = iv;
+    });
+
+    // Ventas set (prenda vendida directamente)
+    const ventasSet = new Set((ventasR.data || []).map(v => v.prenda_id).filter(Boolean));
+
+    // Fecha de venta por pedido (para columna "Vendida")
     const ventaFechaMap = {};
-    (dpDates || []).forEach(d => {
+    (dpDatesR.data || []).forEach(d => {
       if (!d.prenda_id || !d.pedidos?.fecha) return;
       if (d.pedidos.estado !== 'Pagado' && d.pedidos.estado !== 'Entregado') return;
       const f = d.pedidos.fecha;
       if (!ventaFechaMap[d.prenda_id] || f > ventaFechaMap[d.prenda_id]) ventaFechaMap[d.prenda_id] = f;
     });
 
-    let q = db.from('prendas')
-      .select('id, numero, nombre, marca, categoria, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, emoji, fecha_adquisicion, vendedoras(nombre), fotos_prendas(url, orden)')
-      .order('created_at', { ascending: false });
+    // Compute state for each prenda
+    const prendasConEstado = prendas.map(p => ({
+      ...p,
+      estado: calcularEstadoPrenda(p, invVisMap[p.id], ventasSet.has(p.id)),
+      inv:    invVisMap[p.id] || null,
+    }));
 
-    if (_invFilter === 'disponible') q = q.eq('disponible', true).eq('baja', false);
-    else if (_invFilter === 'vendido')    q = q.eq('disponible', false).eq('baja', false);
-    else if (_invFilter === 'baja')       q = q.eq('baja', true);
-
-    if (_invSearch.trim()) {
-      q = q.or(`nombre.ilike.%${_invSearch}%,marca.ilike.%${_invSearch}%`);
-    }
-
-    const { data: prendas, error } = await q;
-    if (error) throw error;
-
-    // Stats (full set for counters, not filtered)
+    // Stats (all, not filtered)
+    const cnt = {};
+    prendasConEstado.forEach(({ estado }) => { cnt[estado] = (cnt[estado] || 0) + 1; });
     const statsEl = document.getElementById('invStats');
-    if (statsEl) {
-      const disp  = prendas.filter(p =>  p.disponible && !p.baja).length;
-      const vend  = prendas.filter(p => !p.disponible && !p.baja).length;
-      const baja  = prendas.filter(p =>  p.baja).length;
-      statsEl.innerHTML = `
-        <div class="stat-chip"><span class="stat-num">${prendas.length}</span><span class="stat-label">Total</span></div>
-        <div class="stat-chip accent"><span class="stat-num">${disp}</span><span class="stat-label">Disponibles</span></div>
-        <div class="stat-chip warning"><span class="stat-num">${vend}</span><span class="stat-label">Vendidas</span></div>
-        <div class="stat-chip muted"><span class="stat-num">${baja}</span><span class="stat-label">Bajas</span></div>`;
-    }
+    if (statsEl) statsEl.innerHTML = `
+      <div class="stat-chip"><span class="stat-num">${prendas.length}</span><span class="stat-label">Total</span></div>
+      <div class="stat-chip accent"><span class="stat-num">${cnt['publicada']||0}</span><span class="stat-label">Publicadas</span></div>
+      <div class="stat-chip" style="background:rgba(133,90,162,0.12)"><span class="stat-num">${cnt['en_visionaria']||0}</span><span class="stat-label">En Visionaria</span></div>
+      <div class="stat-chip warning"><span class="stat-num">${cnt['lista']||0}</span><span class="stat-label">Listas</span></div>
+      <div class="stat-chip muted"><span class="stat-num">${cnt['incompleta']||0}</span><span class="stat-label">Incompletas</span></div>
+      <div class="stat-chip muted"><span class="stat-num">${(cnt['vendida']||0)+(cnt['vendida_asumida']||0)}</span><span class="stat-label">Vendidas</span></div>
+      <div class="stat-chip muted"><span class="stat-num">${cnt['baja']||0}</span><span class="stat-label">Bajas</span></div>`;
 
-    if (!prendas.length) {
+    // Filter by selected tab
+    const filtradas = _invFilter === 'todas'
+      ? prendasConEstado
+      : prendasConEstado.filter(p => (ESTADOS_FILTRO_MAP[_invFilter] || []).includes(p.estado));
+
+    if (!filtradas.length) {
       listEl.innerHTML = '<div class="empty-state">No hay prendas en esta vista.</div>';
       return;
     }
@@ -1028,51 +1138,28 @@ async function loadInventario() {
         <table class="data-table">
           <thead><tr>
             <th>Foto</th><th>ID</th><th>Nombre</th><th>Marca</th>
-            <th>Categoría</th><th>Talla</th><th>Costo ZETINA</th><th>P. Visionaria</th>
-            <th>Min / Max</th><th>Visionaria</th><th>Estado</th><th>Medidas</th><th>Adquirida</th><th>Vendida</th><th>Acciones</th>
+            <th>Categoría</th><th>Talla</th><th>Costo / Vis.</th>
+            <th>Min / Max</th><th>Estado</th><th>Adquirida</th><th>Vendida</th><th>Acciones</th>
           </tr></thead>
           <tbody>
-            ${prendas.map(p => {
+            ${filtradas.map(p => {
               const foto = (p.fotos_prendas || []).sort((a,b)=>(a.orden??0)-(b.orden??0))[0]?.url;
-              return `<tr>
-                <td>${foto
-                  ? `<img src="${foto}" class="table-thumb" alt="">`
-                  : `<div class="table-thumb-empty">${p.emoji || '👚'}</div>`}</td>
+              return `<tr class="${p.estado === 'baja' ? 'tr-baja' : ''}">
+                <td>${foto ? `<img src="${foto}" class="table-thumb" alt="">` : `<div class="table-thumb-empty">${p.emoji || '👚'}</div>`}</td>
                 <td><span class="id-badge">${p.numero || formatZtId(p.id)}</span></td>
                 <td class="td-name">${p.nombre}</td>
                 <td>${p.marca || '—'}</td>
                 <td>${p.categoria || '—'}</td>
                 <td>${p.talla_etiqueta || '—'}</td>
-                <td>${formatPeso(p.precio_costo)}</td>
-                <td>${formatPeso(p.precio_vendedora)}</td>
+                <td style="white-space:nowrap;font-size:0.8rem">${formatPeso(p.precio_costo)}<br><span style="color:var(--purple)">${formatPeso(p.precio_vendedora)}</span></td>
                 <td class="td-precios">${formatPeso(p.precio_min)} – ${formatPeso(p.precio_max)}</td>
-                <td>${p.vendedoras?.nombre || '<span class="text-muted">Catálogo</span>'}</td>
-                <td>${estadoBadge(p)}</td>
-                <td class="td-medidas-inv">${(p.medida_1_valor != null || p.medida_2_valor != null)
-                    ? `${p.medida_1_nombre || 'M1'}: ${p.medida_1_valor ?? '—'} / ${p.medida_2_nombre || 'M2'}: ${p.medida_2_valor ?? '—'}`
-                    : '<span class="text-muted">—</span>'}</td>
+                <td>
+                  ${estadoBadgeNuevo(p.estado, p.inv)}
+                  ${p.estado === 'baja' && p.motivo_baja ? `<div class="inv-baja-motivo">${escHtml(p.motivo_baja)}</div>` : ''}
+                </td>
                 <td style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap">${p.fecha_adquisicion ? formatDate(p.fecha_adquisicion) : '—'}</td>
                 <td style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap">${ventaFechaMap[p.id] ? formatDate(ventaFechaMap[p.id]) : '—'}</td>
-                <td class="td-actions">
-                  ${(() => {
-                    const st = prendaPublishState(p);
-                    return `
-                      <button class="btn-sm btn-outline" onclick="abrirEditarPrenda('${p.id}')">Editar</button>
-                      ${(st === 'incompleta' || st === 'lista')
-                        ? `<button class="btn-sm btn-outline" title="Agregar fotos" onclick="abrirEditarPrenda('${p.id}')">📷 Fotos</button>`
-                        : ''}
-                      ${st === 'lista'
-                        ? `<button class="btn-sm btn-publish" onclick="publicarPrenda('${p.id}')">✅ Publicar</button>`
-                        : ''}
-                      ${!p.baja
-                        ? `<button class="btn-icon" title="${p.disponible ? 'Marcar vendida' : 'Marcar disponible'}"
-                             onclick="toggleDisp('${p.id}',${p.disponible})">${p.disponible ? '✓' : '↩'}</button>
-                           <button class="btn-icon btn-warn" title="Dar de baja" onclick="darBaja('${p.id}')">↓</button>`
-                        : `<button class="btn-icon" title="Reactivar" onclick="reactivar('${p.id}')">↑</button>`}
-                      <button class="btn-icon btn-danger" title="Eliminar"
-                        onclick="deletePrenda('${p.id}','${escQ(p.nombre)}')">🗑</button>`;
-                  })()}
-                </td>
+                <td class="td-actions">${_accionesPrenda(p)}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -1084,20 +1171,12 @@ async function loadInventario() {
   }
 }
 
+// Mantener por compatibilidad (usado en abrirEditarPrenda)
 function prendaPublishState(p) {
   if (p.baja)       return 'baja';
   if (p.disponible) return 'publicada';
   if (p.fotos_prendas?.length > 0) return 'lista';
   return 'incompleta';
-}
-
-function estadoBadge(p) {
-  if (p.baja) return '<span class="badge badge-muted">Baja</span>';
-  switch (prendaPublishState(p)) {
-    case 'publicada':   return '<span class="badge badge-success">Publicada</span>';
-    case 'lista':       return '<span class="badge badge-warning">Lista para publicar</span>';
-    default:            return '<span class="badge badge-muted">Incompleta</span>';
-  }
 }
 
 async function publicarPrenda(id) {
@@ -1114,16 +1193,46 @@ async function toggleDisp(id, current) {
   loadInventario();
 }
 
-async function darBaja(id) {
-  if (!confirm('¿Dar de baja esta prenda? Quedará inactiva en el inventario.')) return;
-  const { error } = await db.from('prendas').update({ baja: true, disponible: false }).eq('id', id);
-  if (error) { showToast(error.message, 'error'); return; }
-  showToast('Prenda dada de baja');
-  loadInventario();
+function darBajaConMotivo(id, nombre) {
+  openModal(`
+    <div class="modal-header">
+      <h3>Dar de baja</h3>
+      <p class="text-muted">${nombre}</p>
+    </div>
+    <form id="bajaForm" class="modal-form">
+      <div class="form-group">
+        <label>Motivo de baja *</label>
+        <textarea id="bajaMotivoInput" rows="3" required style="resize:vertical"
+          placeholder="Ej: Mancha permanente, cierre roto sin reparación posible…"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="btn btn-danger" id="bajaSubmitBtn">Confirmar baja</button>
+      </div>
+    </form>`);
+
+  document.getElementById('bajaForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn    = document.getElementById('bajaSubmitBtn');
+    const motivo = document.getElementById('bajaMotivoInput').value.trim();
+    if (!motivo) { showToast('Escribe el motivo de baja', 'info'); return; }
+    btn.disabled = true; btn.textContent = '…';
+    const { error } = await db.from('prendas').update({
+      baja: true, disponible: false,
+      motivo_baja: motivo,
+      fecha_baja:  new Date().toISOString(),
+    }).eq('id', id);
+    if (error) { showToast(error.message, 'error'); btn.disabled = false; btn.textContent = 'Confirmar baja'; return; }
+    closeModal();
+    showToast('Prenda dada de baja');
+    loadInventario();
+  });
 }
 
 async function reactivar(id) {
-  const { error } = await db.from('prendas').update({ baja: false, disponible: true }).eq('id', id);
+  const { error } = await db.from('prendas').update({
+    baja: false, disponible: false, motivo_baja: null, fecha_baja: null,
+  }).eq('id', id);
   if (error) { showToast(error.message, 'error'); return; }
   showToast('Prenda reactivada');
   loadInventario();
