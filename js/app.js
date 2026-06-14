@@ -1848,7 +1848,7 @@ async function loadPedidos() {
 
   try {
     let q = db.from('pedidos')
-      .select('id, numero, fecha, estado, created_at, vendedoras(nombre), detalle_pedidos(prenda_id, precio, nombre, marca, emoji)')
+      .select('id, numero, fecha, estado, created_at, credito_aplicado, vendedoras(nombre), detalle_pedidos(prenda_id, precio, nombre, marca, emoji)')
       .order('created_at', { ascending: false });
 
     if (_pedidosEstado) q = q.eq('estado', _pedidosEstado);
@@ -1895,7 +1895,10 @@ async function loadPedidos() {
                 <td>${p.vendedoras?.nombre || '—'}</td>
                 <td>${formatDate(p.fecha || p.created_at)}</td>
                 <td>${items} art.</td>
-                <td>${formatPeso(total)}</td>
+                <td>
+                  ${formatPeso(total)}
+                  ${(p.credito_aplicado > 0) ? `<div style="font-size:0.72rem;color:#855AA2;margin-top:2px;font-weight:600">Crédito: −${formatPeso(p.credito_aplicado)}</div>` : ''}
+                </td>
                 <td>
                   <select class="estado-select" onchange="updateEstadoPedido('${p.id}', this.value)">
                     ${ESTADOS_PEDIDO.map(e => `<option value="${e}" ${e === p.estado ? 'selected' : ''}>${e}</option>`).join('')}
@@ -2011,12 +2014,16 @@ async function eliminarPedido(id) {
 
 async function verDetallePedido(pedidoId) {
   const { data: p } = await db.from('pedidos')
-    .select('*, vendedoras(nombre), detalle_pedidos(*), direccion_entrega_texto')
+    .select('*, vendedora_id, vendedoras(nombre, credito), detalle_pedidos(*), direccion_entrega_texto')
     .eq('id', pedidoId).single();
   if (!p) return;
 
-  const items = p.detalle_pedidos || [];
-  const total = items.reduce((s, d) => s + (d.precio || 0), 0);
+  const items        = p.detalle_pedidos || [];
+  const total        = items.reduce((s, d) => s + (d.precio || 0), 0);
+  const vendCredito  = p.vendedoras?.credito || 0;
+  const yaTieneCred  = p.credito_aplicado > 0;
+  const puedeAplicar = vendCredito > 0 && !yaTieneCred && (p.estado === 'En proceso' || p.estado === 'En camino');
+  const creditoMax   = Math.min(vendCredito, total);
 
   openModal(`
     <div class="modal-header">
@@ -2038,11 +2045,85 @@ async function verDetallePedido(pedidoId) {
             </tbody>
           </table>
         </div>
-        <div class="modal-total">Total: <strong>${formatPeso(total)}</strong></div>`}
+        <div class="modal-total">Total del pedido: <strong>${formatPeso(total)}</strong></div>
+        <div class="credito-detalle-section">
+          <div class="credito-detalle-info">
+            Crédito disponible de la Visionaria:
+            <strong style="color:${vendCredito > 0 ? '#855AA2' : 'var(--text-muted)'}">${formatPeso(vendCredito)}</strong>
+            ${yaTieneCred ? `<span class="badge badge-info" style="margin-left:8px">Crédito ya aplicado: ${formatPeso(p.credito_aplicado)}</span>` : ''}
+          </div>
+          ${puedeAplicar ? `
+          <label class="credito-checkbox-label">
+            <input type="checkbox" id="aplicarCreditoChk">
+            Aplicar crédito a este pedido (−${formatPeso(creditoMax)})
+          </label>
+          <div id="creditoResumen" class="credito-resumen" style="display:none">
+            <span>Crédito aplicado: <strong style="color:#855AA2">−${formatPeso(creditoMax)}</strong></span>
+            <span>Total a cobrar: <strong>${formatPeso(Math.max(0, total - creditoMax))}</strong></span>
+          </div>
+          <button class="btn btn-primary" id="btnConfirmarPago" style="margin-top:12px;width:100%">
+            Confirmar pago
+          </button>` : ''}
+        </div>`}
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal()">Cerrar</button>
     </div>`);
+
+  // Wiring del checkbox y botón
+  const chk = document.getElementById('aplicarCreditoChk');
+  const resumen = document.getElementById('creditoResumen');
+  const btnPago = document.getElementById('btnConfirmarPago');
+  if (chk) {
+    chk.addEventListener('change', () => {
+      resumen.style.display = chk.checked ? 'flex' : 'none';
+    });
+  }
+  if (btnPago) {
+    btnPago.addEventListener('click', async () => {
+      const credAplicado = chk?.checked ? creditoMax : 0;
+      btnPago.disabled = true;
+      btnPago.textContent = 'Procesando…';
+      await confirmarPagoPedido(pedidoId, p.vendedora_id, credAplicado, total);
+      closeModal();
+    });
+  }
+}
+}
+
+async function confirmarPagoPedido(pedidoId, vendedoraId, creditoAplicado, total) {
+  try {
+    // Marcar pedido como Pagado + guardar crédito aplicado
+    const updatePedido = { estado: 'Pagado' };
+    if (creditoAplicado > 0) updatePedido.credito_aplicado = creditoAplicado;
+    const { error: e1 } = await db.from('pedidos').update(updatePedido).eq('id', pedidoId);
+    if (e1) throw e1;
+
+    // Descontar crédito de la visionaria
+    if (creditoAplicado > 0 && vendedoraId) {
+      const { data: vend, error: e2 } = await db.from('vendedoras').select('credito').eq('id', vendedoraId).single();
+      if (e2) throw e2;
+      const { error: e3 } = await db.from('vendedoras')
+        .update({ credito: Math.max(0, (vend.credito || 0) - creditoAplicado) })
+        .eq('id', vendedoraId);
+      if (e3) throw e3;
+    }
+
+    // Marcar prendas como no disponibles
+    const { data: detalles } = await db.from('detalle_pedidos').select('prenda_id').eq('pedido_id', pedidoId);
+    const prendaIds = (detalles || []).map(d => d.prenda_id).filter(Boolean);
+    if (prendaIds.length) {
+      await db.from('prendas').update({ disponible: false }).in('id', prendaIds);
+    }
+
+    const msg = creditoAplicado > 0
+      ? `Pagado. Crédito de ${formatPeso(creditoAplicado)} aplicado. Total cobrado: ${formatPeso(Math.max(0, total - creditoAplicado))}`
+      : 'Pedido marcado como Pagado';
+    showToast(msg, 'success');
+    loadPedidos();
+  } catch (err) {
+    showToast(err.message || 'Error al confirmar pago', 'error');
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2057,7 +2138,7 @@ async function renderVendedoras() {
     const primerDiaMes = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
 
     const [vendsR, statsR, ventasMesR, invR, clientasR] = await Promise.all([
-      db.from('vendedoras').select('id, nombre, nivel, telefono, foto_url').order('nombre'),
+      db.from('vendedoras').select('id, nombre, nivel, telefono, foto_url, credito').order('nombre'),
       db.from('visionaria_stats').select('vendedora_id, puntos, nivel_actual, logros, matches_totales'),
       db.from('ventas').select('monto, vendedora_id').gte('fecha', primerDiaMes),
       db.from('inventario_vendedoras').select('vendedora_id, estado'),
@@ -2102,7 +2183,7 @@ async function renderVendedoras() {
             <table class="data-table">
               <thead><tr>
                 <th>Visionaria</th><th>Nivel</th><th>Puntos</th>
-                <th>Ganancia del mes</th><th>Inv. activo</th><th>Prestadas</th>
+                <th>Ganancia del mes</th><th>Crédito</th><th>Inv. activo</th><th>Prestadas</th>
                 <th>Clientas</th><th>Acciones</th>
               </tr></thead>
               <tbody>
@@ -2123,6 +2204,7 @@ async function renderVendedoras() {
                     <td><span class="badge badge-${nivelBadge[v.nivel] || ''}">${v.nivel || 'Básico'}</span></td>
                     <td>${st.puntos != null ? `<span class="vis-puntos">${st.puntos} pts</span>` : '—'}</td>
                     <td style="font-weight:600;color:var(--success)">${gan > 0 ? formatPeso(gan) : '—'}</td>
+                    <td>${v.credito > 0 ? `<span style="color:#855AA2;font-weight:700">${formatPeso(v.credito)}</span>` : '—'}</td>
                     <td>${invD.activas > 0 ? `<span class="vis-inv-badge">${invD.activas}</span>` : '—'}</td>
                     <td>${invD.prestadas > 0 ? `<span class="vis-prest-badge">${invD.prestadas}</span>` : '—'}</td>
                     <td>${nCli > 0 ? nCli : '—'}</td>

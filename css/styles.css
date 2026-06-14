@@ -1201,6 +1201,34 @@ input.id-input-ok     { border-color: #16a34a !important; }
 .modal-total { text-align: right; padding: 12px 0 0; font-size: 0.9rem; color: var(--text-muted); }
 .modal-total strong { color: var(--purple); font-size: 1rem; }
 
+.credito-detalle-section {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.credito-detalle-info { font-size: 0.875rem; color: var(--text-muted); }
+.credito-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  color: var(--text);
+}
+.credito-checkbox-label input[type="checkbox"] { accent-color: #855AA2; width: 16px; height: 16px; }
+.credito-resumen {
+  display: flex;
+  gap: 16px;
+  font-size: 0.85rem;
+  padding: 10px 14px;
+  background: rgba(133,90,162,0.08);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(133,90,162,0.2);
+}
+
 .modal-footer {
   display: flex;
   justify-content: flex-end;
