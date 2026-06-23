@@ -2614,6 +2614,10 @@ async function renderFinanciero() {
       .reduce((s, d) => s + (+d.precio || 0), 0);
     const porCobrar          = detallesPorCobrar.reduce((s, d) => s + (+d.precio || 0), 0);
 
+    // ── Créditos emitidos a Visionarias (informativo) ──────────────────────────
+    // SUM(credito) de vendedoras: saldo a favor acumulado por devoluciones aprobadas.
+    const creditosEmitidos   = vendedoras.reduce((s, v) => s + (+v.credito || 0), 0);
+
     // Mejor mes histórico
     const ingresosPorMes = {};
     detallesPagados.forEach(d => {
@@ -2713,6 +2717,11 @@ async function renderFinanciero() {
           <div class="kpi-label">Mejor mes</div>
           <div class="kpi-value" style="font-size:1.3rem">${mejorMesLabel}</div>
           <div class="kpi-sub">${mejorMesEntry ? formatPeso(mejorMesEntry[1]) : '—'}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Créditos emitidos</div>
+          <div class="kpi-value" style="color:#855AA2">${formatPeso(creditosEmitidos)}</div>
+          <div class="kpi-sub">Saldo a favor de Visionarias</div>
         </div>
       </div>
 
