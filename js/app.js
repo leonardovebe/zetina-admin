@@ -2155,9 +2155,11 @@ async function renderVendedoras() {
     ventasMes.forEach(v => { ventasMap[v.vendedora_id] = (ventasMap[v.vendedora_id] || 0) + (+v.monto || 0); });
     const invMap = {};
     inv.forEach(i => {
-      if (!invMap[i.vendedora_id]) invMap[i.vendedora_id] = { activas: 0, prestadas: 0 };
-      if (i.estado === 'prestado' || i.estado === 'prestada') invMap[i.vendedora_id].prestadas++;
-      else invMap[i.vendedora_id].activas++;
+      if (!invMap[i.vendedora_id]) invMap[i.vendedora_id] = { activas: 0, prestadas: 0, vendidas: 0 };
+      const e = i.estado;
+      if (e === 'prestado' || e === 'prestada') { invMap[i.vendedora_id].prestadas++; invMap[i.vendedora_id].activas++; }
+      else if (e === 'activo') invMap[i.vendedora_id].activas++;
+      else if (e === 'vendido' || e === 'vendida') invMap[i.vendedora_id].vendidas++;
     });
     const clientasMap = {};
     clientas.forEach(c => { clientasMap[c.vendedora_id] = (clientasMap[c.vendedora_id] || 0) + 1; });
@@ -2182,14 +2184,14 @@ async function renderVendedoras() {
             <table class="data-table">
               <thead><tr>
                 <th>Visionaria</th><th>Nivel</th><th>Puntos</th>
-                <th>Ganancia del mes</th><th>Crédito</th><th>Inv. activo</th><th>Prestadas</th>
+                <th>Ganancia del mes</th><th>Crédito</th><th>Inv. activo</th><th>Prestadas</th><th>Vendidas</th>
                 <th>Clientas</th><th>Acciones</th>
               </tr></thead>
               <tbody>
                 ${vends.map(v => {
                   const st   = statsMap[v.id] || {};
                   const gan  = ventasMap[v.id] || 0;
-                  const invD = invMap[v.id]    || { activas: 0, prestadas: 0 };
+                  const invD = invMap[v.id]    || { activas: 0, prestadas: 0, vendidas: 0 };
                   const nCli = clientasMap[v.id] || 0;
                   return `<tr>
                     <td>
@@ -2206,6 +2208,7 @@ async function renderVendedoras() {
                     <td>${v.credito > 0 ? `<span style="color:#855AA2;font-weight:700">${formatPeso(v.credito)}</span>` : '—'}</td>
                     <td>${invD.activas > 0 ? `<span class="vis-inv-badge">${invD.activas}</span>` : '—'}</td>
                     <td>${invD.prestadas > 0 ? `<span class="vis-prest-badge">${invD.prestadas}</span>` : '—'}</td>
+                    <td>${invD.vendidas > 0 ? invD.vendidas : '—'}</td>
                     <td>${nCli > 0 ? nCli : '—'}</td>
                     <td class="td-actions">
                       <button class="btn-sm btn-outline" onclick="renderDetalleVisionaria('${v.id}')">Ver perfil</button>
