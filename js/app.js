@@ -2883,7 +2883,7 @@ async function loadDevoluciones() {
 
   try {
     let q = db.from('devoluciones')
-      .select('*, vendedoras(id, nombre, telefono), prendas(id, numero, nombre, precio_costo)')
+      .select('*, vendedoras(id, nombre, telefono), prendas(id, numero, nombre, precio_costo, precio_vendedora)')
       .order('created_at', { ascending: false });
 
     if (_devFiltro !== 'todas') q = q.eq('estado', _devFiltro);
@@ -2968,7 +2968,7 @@ async function aprobarDevolucion(devId) {
   const dev = _devCache.get(devId);
   if (!dev) return;
   const nombrePrenda = dev.prendas?.nombre || 'esta prenda';
-  const costo        = dev.prendas?.precio_costo || 0;
+  const costo        = dev.prendas?.precio_vendedora || 0;
   if (!confirm(`¿Aprobar la devolución de "${nombrePrenda}"?\nSe acreditarán ${formatPeso(costo)} a la vendedora.`)) return;
 
   try {
