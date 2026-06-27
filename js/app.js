@@ -452,6 +452,11 @@ async function renderPrendas() {
               <textarea id="fComoPresentarla" rows="4" style="resize:vertical"
                 placeholder="Guión para presentarla y cerrar la venta…"></textarea>
             </div>
+            <div class="form-group" style="margin-top:12px">
+              <label>Descripción para clientas</label>
+              <textarea id="fDescripcionPublica" rows="3" style="resize:vertical"
+                placeholder="Descripción aspiracional que verá la clienta en el catálogo…"></textarea>
+            </div>
           </div>
 
           <!-- 24. Guardar -->
@@ -782,6 +787,7 @@ async function handleGenerarIA() {
     if (r.por_que_vale)    document.getElementById('fPorQueVale').value     = r.por_que_vale;
     if (r.cliente_ideal)   document.getElementById('fClienteIdeal').value   = r.cliente_ideal;
     if (r.como_presentarla) document.getElementById('fComoPresentarla').value = r.como_presentarla;
+    if (r.descripcion_publica) document.getElementById('fDescripcionPublica').value = r.descripcion_publica;
 
     showToast('¡Campos llenados con IA! Revisa y edita antes de guardar.', 'success');
   } catch (err) {
@@ -850,6 +856,7 @@ async function handlePrendaSubmit(e) {
       por_que_vale:     document.getElementById('fPorQueVale').value.trim()      || null,
       cliente_ideal:    document.getElementById('fClienteIdeal').value.trim()    || null,
       como_presentarla: document.getElementById('fComoPresentarla').value.trim() || null,
+      descripcion_publica: document.getElementById('fDescripcionPublica').value.trim() || null,
     };
     const cat = document.getElementById('fCategoria').value;
     const prendaData = {
@@ -1485,6 +1492,10 @@ async function abrirEditarPrenda(id) {
           <label>Cómo presentarla</label>
           <textarea id="eComoPresentarla" rows="3" placeholder="Tips para mostrarla, con qué combinarla, cómo usarla…">${escHtml(desc.como_presentarla)}</textarea>
         </div>
+        <div class="form-group">
+          <label>Descripción para clientas</label>
+          <textarea id="eDescripcionPublica" rows="3" placeholder="Descripción aspiracional que verá la clienta en el catálogo…">${escHtml(desc.descripcion_publica)}</textarea>
+        </div>
       </div>
 
       <div class="modal-footer">
@@ -1642,6 +1653,7 @@ async function handleEditGenerarIA() {
     if (r.por_que_vale)    document.getElementById('ePorQueVale').value      = r.por_que_vale;
     if (r.cliente_ideal)   document.getElementById('eClienteIdeal').value    = r.cliente_ideal;
     if (r.como_presentarla) document.getElementById('eComoPresentarla').value = r.como_presentarla;
+    if (r.descripcion_publica) document.getElementById('eDescripcionPublica').value = r.descripcion_publica;
 
     _editFotosEtiqueta = [];
     _renderEditEtiquetas();
@@ -1737,6 +1749,7 @@ async function guardarEditPrenda(id, hasExtras) {
       por_que_vale:     document.getElementById('ePorQueVale').value.trim()       || null,
       cliente_ideal:    document.getElementById('eClienteIdeal').value.trim()     || null,
       como_presentarla: document.getElementById('eComoPresentarla').value.trim()  || null,
+      descripcion_publica: document.getElementById('eDescripcionPublica').value.trim() || null,
     };
     const payload = {
       nombre:         document.getElementById('eNombre').value.trim(),
