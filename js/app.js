@@ -856,7 +856,6 @@ async function handlePrendaSubmit(e) {
       por_que_vale:     document.getElementById('fPorQueVale').value.trim()      || null,
       cliente_ideal:    document.getElementById('fClienteIdeal').value.trim()    || null,
       como_presentarla: document.getElementById('fComoPresentarla').value.trim() || null,
-      descripcion_publica: document.getElementById('fDescripcionPublica').value.trim() || null,
     };
     const cat = document.getElementById('fCategoria').value;
     const prendaData = {
@@ -881,6 +880,7 @@ async function handlePrendaSubmit(e) {
       baja:              false,
       fecha_adquisicion: new Date().toISOString(),
       descripcion:       Object.values(_desc).some(Boolean) ? JSON.stringify(_desc) : null,
+      descripcion_publica: document.getElementById('fDescripcionPublica')?.value || null,
       observaciones:     document.getElementById('fObservaciones')?.value.trim()   || null,
     };
 
@@ -1262,7 +1262,7 @@ async function abrirEditarPrenda(id) {
 
   // Try fetching with optional columns (numero, categoria); fall back if they don't exist yet
   let p, hasExtras = true;
-  const fullSel = 'id, nombre, marca, color, categoria, departamento, numero, emoji, gradiente, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url, orden)';
+  const fullSel = 'id, nombre, marca, color, categoria, departamento, numero, emoji, gradiente, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, descripcion_publica, fotos_prendas(id, url, orden)';
   const safeSel = 'id, nombre, marca, color, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url, orden)';
 
   let { data, error } = await db.from('prendas').select(fullSel).eq('id', id).single();
@@ -1494,7 +1494,7 @@ async function abrirEditarPrenda(id) {
         </div>
         <div class="form-group">
           <label>Descripción para clientas</label>
-          <textarea id="eDescripcionPublica" rows="3" placeholder="Descripción aspiracional que verá la clienta en el catálogo…">${escHtml(desc.descripcion_publica)}</textarea>
+          <textarea id="eDescripcionPublica" rows="3" placeholder="Descripción aspiracional que verá la clienta en el catálogo…">${escHtml(p.descripcion_publica)}</textarea>
         </div>
       </div>
 
@@ -1749,7 +1749,6 @@ async function guardarEditPrenda(id, hasExtras) {
       por_que_vale:     document.getElementById('ePorQueVale').value.trim()       || null,
       cliente_ideal:    document.getElementById('eClienteIdeal').value.trim()     || null,
       como_presentarla: document.getElementById('eComoPresentarla').value.trim()  || null,
-      descripcion_publica: document.getElementById('eDescripcionPublica').value.trim() || null,
     };
     const payload = {
       nombre:         document.getElementById('eNombre').value.trim(),
@@ -1770,6 +1769,7 @@ async function guardarEditPrenda(id, hasExtras) {
       disponible:     estadoVal === 'disponible',
       baja:           estadoVal === 'baja',
       descripcion:    Object.values(_eDesc).some(Boolean) ? JSON.stringify(_eDesc) : null,
+      descripcion_publica: document.getElementById('eDescripcionPublica')?.value || null,
       observaciones:  document.getElementById('eObservaciones')?.value.trim() || null,
     };
     if (hasExtras) {
