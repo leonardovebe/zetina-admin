@@ -2141,6 +2141,8 @@ async function confirmarPagoPedido(pedidoId, vendedoraId, creditoAplicado, total
         .update({ credito: Math.max(0, (vend.credito || 0) - creditoAplicado) })
         .eq('id', vendedoraId);
       if (e3) throw e3;
+      // Evita doble descuento si luego se cambia el estado por el dropdown.
+      await db.from('pedidos').update({ credito_aplicado: 0 }).eq('id', pedidoId);
     }
 
     // Marcar prendas como no disponibles
