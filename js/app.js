@@ -1945,6 +1945,41 @@ async function updateEstadoPedido(id, estado) {
 
     if (errPrendas) { showToast(`Error actualizando prendas: ${errPrendas.message}`, 'error'); return; }
 
+    // Descontar crédito aplicado de la vendedora (idempotente).
+    const { data: ped, error: errPed } = await db
+      .from('pedidos')
+      .select('credito_aplicado, vendedora_id')
+      .eq('id', id)
+      .single();
+
+    if (errPed) { showToast(`Error leyendo pedido: ${errPed.message}`, 'error'); return; }
+
+    const creditoAplicado = +ped?.credito_aplicado || 0;
+    if (creditoAplicado > 0 && ped.vendedora_id) {
+      const { data: vend, error: errVend } = await db
+        .from('vendedoras')
+        .select('credito')
+        .eq('id', ped.vendedora_id)
+        .single();
+
+      if (errVend) { showToast(`Error leyendo crédito: ${errVend.message}`, 'error'); return; }
+
+      const { error: errDesc } = await db
+        .from('vendedoras')
+        .update({ credito: Math.max(0, (vend.credito || 0) - creditoAplicado) })
+        .eq('id', ped.vendedora_id);
+
+      if (errDesc) { showToast(`Error descontando crédito: ${errDesc.message}`, 'error'); return; }
+
+      // Marcar como ya descontado para evitar doble descuento si se reabre el estado.
+      const { error: errFlag } = await db
+        .from('pedidos')
+        .update({ credito_aplicado: 0 })
+        .eq('id', id);
+
+      if (errFlag) { showToast(`Error actualizando pedido: ${errFlag.message}`, 'error'); return; }
+    }
+
     showToast(`Pagado — ${prendaIds.length} prenda${prendaIds.length > 1 ? 's' : ''} marcada${prendaIds.length > 1 ? 's' : ''} como vendida${prendaIds.length > 1 ? 's' : ''}`);
     if (document.getElementById('invList')) loadInventario();
     return;
