@@ -2193,7 +2193,7 @@ async function renderVendedoras() {
       db.from('inventario_vendedoras').select('vendedora_id, estado'),
       db.from('clientes').select('id, vendedora_id'),
       db.from('prestamos').select('vendedora_id, prenda_id').eq('estado', 'devuelto'),
-      db.from('ventas').select('vendedora_id, prenda_id'),
+      db.from('ventas').select('vendedora_id, prenda_id, monto, prendas(precio_min, precio_max)'),
     ]);
 
     const vends     = vendsR.data     || [];
@@ -2234,6 +2234,28 @@ async function renderVendedoras() {
       return `${(a.conVenta / a.cerrados * 100).toFixed(1)}%`;
     };
 
+    // % sobre rango de precio: qué tan cerca del máximo vende cada Visionaria.
+    const rangoMap = {};
+    ventasAll.forEach(v => {
+      const p = v.prendas;
+      if (!p) return;
+      const min = +p.precio_min, max = +p.precio_max;
+      if (!(max > min)) return; // omite si rango inválido o división por cero
+      const pct = ((+v.monto || 0) - min) / (max - min) * 100;
+      if (!rangoMap[v.vendedora_id]) rangoMap[v.vendedora_id] = { sum: 0, count: 0 };
+      rangoMap[v.vendedora_id].sum += pct;
+      rangoMap[v.vendedora_id].count++;
+    });
+    const renderRango = vid => {
+      const r = rangoMap[vid];
+      if (!r || r.count === 0) return '--';
+      const avg = r.sum / r.count;
+      const txt = `${avg.toFixed(1)}%`;
+      if (avg >= 70) return `<span style="background:#16001C;color:#DEFF00;font-weight:700;padding:0.15rem 0.5rem;border-radius:999px">${txt}</span>`;
+      if (avg < 30)  return `<span style="color:#d9776a;font-weight:600">${txt}</span>`;
+      return `<span style="color:#16001C">${txt}</span>`;
+    };
+
     const nivelBadge = { 'Básico': 'muted', 'Silver': '', 'Gold': 'warning', 'Platinum': 'accent' };
 
     main.innerHTML = `
@@ -2255,7 +2277,7 @@ async function renderVendedoras() {
               <thead><tr>
                 <th>Visionaria</th><th>Nivel</th><th>Puntos</th>
                 <th>Ganancia del mes</th><th>Crédito</th><th>Inv. activo</th><th>Prestadas</th><th>Vendidas</th>
-                <th>Aciertos</th><th>Clientas</th><th>Acciones</th>
+                <th>Aciertos</th><th>% Sobre rango</th><th>Clientas</th><th>Acciones</th>
               </tr></thead>
               <tbody>
                 ${vends.map(v => {
@@ -2280,6 +2302,7 @@ async function renderVendedoras() {
                     <td>${invD.prestadas > 0 ? `<span class="vis-prest-badge">${invD.prestadas}</span>` : '—'}</td>
                     <td>${invD.vendidas > 0 ? invD.vendidas : '—'}</td>
                     <td>${formatAciertos(v.id)}</td>
+                    <td>${renderRango(v.id)}</td>
                     <td>${nCli > 0 ? nCli : '—'}</td>
                     <td class="td-actions">
                       <button class="btn-sm btn-outline" onclick="renderDetalleVisionaria('${v.id}')">Ver perfil</button>
