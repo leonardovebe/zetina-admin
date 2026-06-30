@@ -2645,17 +2645,18 @@ async function renderFinanciero() {
   main.innerHTML = `<div class="fin-loading"><div class="spinner"></div> Calculando resumen…</div>`;
 
   try {
-    const [detallesR, pedidosR, vendedorasR, clientesR, prendasR, gastosR] = await Promise.all([
+    const [detallesR, pedidosR, vendedorasR, clientesR, prendasR, gastosR, bajasR] = await Promise.all([
       db.from('detalle_pedidos').select('precio, pedidos(id, estado, fecha, created_at, vendedora_id, vendedoras(nombre)), prendas(precio_costo, numero, marca, fecha_adquisicion)'),
       db.from('pedidos').select('estado, created_at'),
       db.from('vendedoras').select('id, nombre, credito, nivel'),
       db.from('clientes').select('id, vendedora_id'),
       db.from('prendas').select('disponible, baja'),
       db.from('gastos').select('monto, mes, anio, categoria'),
+      db.from('prendas').select('precio_costo, fecha_baja').eq('baja', true).not('fecha_baja', 'is', null),
     ]);
 
     [['detalle_pedidos',detallesR],['pedidos',pedidosR],['vendedoras',vendedorasR],
-     ['clientes',clientesR],['prendas',prendasR],['gastos',gastosR],
+     ['clientes',clientesR],['prendas',prendasR],['gastos',gastosR],['bajas',bajasR],
     ].forEach(([n, r]) => { if (r.error) console.error(`[financiero] error en ${n}:`, r.error.message); });
 
     const detallesTodos = detallesR.data  || [];
@@ -2664,6 +2665,7 @@ async function renderFinanciero() {
     const clientes      = clientesR.data  || [];
     const prendas       = prendasR.data   || [];
     const gastosFin     = gastosR.data    || [];
+    const bajas         = bajasR.data     || [];
 
     // ── Ingresos ZETINA: price_vendedora = detalle_pedidos.precio ──────────────
     const detallesPagados    = detallesTodos.filter(d =>
@@ -2708,6 +2710,28 @@ async function renderFinanciero() {
     const totalGastosMes       = gastosMesArr.reduce((s, g) => s + (+g.monto || 0), 0);
     const totalGastosHistorico = gastosFin.reduce((s, g) => s + (+g.monto || 0), 0);
     const gananciaNeta         = ingresosMes - totalGastosMes;
+
+    // ── Pérdidas por bajas ─────────────────────────────────────────────────────
+    const _mesBaja = b => (b.fecha_baja || '').slice(0, 7);
+    const _labelMes = ym => {
+      if (!ym) return '—';
+      const [y, m] = ym.split('-');
+      return `${['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][+m-1]} ${y}`;
+    };
+    const totalPerdido   = bajas.reduce((s, b) => s + (+b.precio_costo || 0), 0);
+    const bajasMesArr    = bajas.filter(b => _mesBaja(b) === mesActual);
+    const perdidaMes     = bajasMesArr.reduce((s, b) => s + (+b.precio_costo || 0), 0);
+    const perdidaPorMes  = {};
+    bajas.forEach(b => {
+      const mes = _mesBaja(b);
+      if (!mes) return;
+      if (!perdidaPorMes[mes]) perdidaPorMes[mes] = { total: 0, count: 0 };
+      perdidaPorMes[mes].total += (+b.precio_costo || 0);
+      perdidaPorMes[mes].count++;
+    });
+    const perdidaEntries = Object.entries(perdidaPorMes);
+    const mejorMesBaja   = perdidaEntries.sort((a, b) => a[1].total - b[1].total)[0] || null; // menor pérdida
+    const peorMesBaja    = perdidaEntries.sort((a, b) => b[1].total - a[1].total)[0] || null; // mayor pérdida
 
     console.log('[financiero] datos:', {
       detallesPagados: detallesPagados.length, detallesPorCobrar: detallesPorCobrar.length,
@@ -2815,6 +2839,31 @@ async function renderFinanciero() {
           <div class="kpi-label">Gastos históricos</div>
           <div class="kpi-value">${formatPeso(totalGastosHistorico)}</div>
           <div class="kpi-sub">${gastosFin.length} registros totales</div>
+        </div>
+      </div>
+
+      <!-- Pérdidas por bajas -->
+      <div class="fin-section-divider">Pérdidas por Bajas</div>
+      <div class="fin-grid">
+        <div class="kpi-card kpi-danger">
+          <div class="kpi-label">Total perdido</div>
+          <div class="kpi-value">${formatPeso(totalPerdido)}</div>
+          <div class="kpi-sub">${bajas.length} prenda${bajas.length === 1 ? '' : 's'} dada${bajas.length === 1 ? '' : 's'} de baja</div>
+        </div>
+        <div class="kpi-card kpi-danger">
+          <div class="kpi-label">Bajas este mes</div>
+          <div class="kpi-value">${formatPeso(perdidaMes)}</div>
+          <div class="kpi-sub">${bajasMesArr.length} baja${bajasMesArr.length === 1 ? '' : 's'} este mes</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Mejor mes</div>
+          <div class="kpi-value" style="font-size:1.3rem">${mejorMesBaja ? _labelMes(mejorMesBaja[0]) : '—'}</div>
+          <div class="kpi-sub">${mejorMesBaja ? `${formatPeso(mejorMesBaja[1].total)} · menos pérdida` : 'Sin bajas registradas'}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Peor mes</div>
+          <div class="kpi-value" style="font-size:1.3rem">${peorMesBaja ? _labelMes(peorMesBaja[0]) : '—'}</div>
+          <div class="kpi-sub">${peorMesBaja ? `${formatPeso(peorMesBaja[1].total)} · más pérdida` : 'Sin bajas registradas'}</div>
         </div>
       </div>
 
