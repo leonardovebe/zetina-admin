@@ -2186,12 +2186,14 @@ async function renderVendedoras() {
     const now = new Date();
     const primerDiaMes = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
 
-    const [vendsR, statsR, ventasMesR, invR, clientasR] = await Promise.all([
+    const [vendsR, statsR, ventasMesR, invR, clientasR, prestamosR, ventasAllR] = await Promise.all([
       db.from('vendedoras').select('id, nombre, nivel, telefono, foto_url, credito').order('nombre'),
       db.from('visionaria_stats').select('vendedora_id, puntos, nivel_actual, logros, matches_totales'),
       db.from('ventas').select('monto, vendedora_id').gte('fecha', primerDiaMes),
       db.from('inventario_vendedoras').select('vendedora_id, estado'),
       db.from('clientes').select('id, vendedora_id'),
+      db.from('prestamos').select('vendedora_id, prenda_id').eq('estado', 'devuelto'),
+      db.from('ventas').select('vendedora_id, prenda_id'),
     ]);
 
     const vends     = vendsR.data     || [];
@@ -2199,6 +2201,8 @@ async function renderVendedoras() {
     const ventasMes = ventasMesR.data || [];
     const inv       = invR.data       || [];
     const clientas  = clientasR.data  || [];
+    const prestamos = prestamosR.data || [];
+    const ventasAll = ventasAllR.data || [];
 
     const statsMap   = Object.fromEntries(stats.map(s => [s.vendedora_id, s]));
     const ventasMap  = {};
@@ -2213,6 +2217,22 @@ async function renderVendedoras() {
     });
     const clientasMap = {};
     clientas.forEach(c => { clientasMap[c.vendedora_id] = (clientasMap[c.vendedora_id] || 0) + 1; });
+
+    // Tasa de aciertos: préstamos devueltos que terminaron en venta de la misma prenda.
+    const ventaKeys = new Set(
+      ventasAll.filter(v => v.prenda_id && v.vendedora_id).map(v => `${v.vendedora_id}|${v.prenda_id}`)
+    );
+    const aciertosMap = {};
+    prestamos.forEach(p => {
+      if (!aciertosMap[p.vendedora_id]) aciertosMap[p.vendedora_id] = { cerrados: 0, conVenta: 0 };
+      aciertosMap[p.vendedora_id].cerrados++;
+      if (p.prenda_id && ventaKeys.has(`${p.vendedora_id}|${p.prenda_id}`)) aciertosMap[p.vendedora_id].conVenta++;
+    });
+    const formatAciertos = vid => {
+      const a = aciertosMap[vid];
+      if (!a || a.cerrados === 0) return '--';
+      return `${(a.conVenta / a.cerrados * 100).toFixed(1)}%`;
+    };
 
     const nivelBadge = { 'Básico': 'muted', 'Silver': '', 'Gold': 'warning', 'Platinum': 'accent' };
 
@@ -2235,7 +2255,7 @@ async function renderVendedoras() {
               <thead><tr>
                 <th>Visionaria</th><th>Nivel</th><th>Puntos</th>
                 <th>Ganancia del mes</th><th>Crédito</th><th>Inv. activo</th><th>Prestadas</th><th>Vendidas</th>
-                <th>Clientas</th><th>Acciones</th>
+                <th>Aciertos</th><th>Clientas</th><th>Acciones</th>
               </tr></thead>
               <tbody>
                 ${vends.map(v => {
@@ -2259,6 +2279,7 @@ async function renderVendedoras() {
                     <td>${invD.activas > 0 ? `<span class="vis-inv-badge">${invD.activas}</span>` : '—'}</td>
                     <td>${invD.prestadas > 0 ? `<span class="vis-prest-badge">${invD.prestadas}</span>` : '—'}</td>
                     <td>${invD.vendidas > 0 ? invD.vendidas : '—'}</td>
+                    <td>${formatAciertos(v.id)}</td>
                     <td>${nCli > 0 ? nCli : '—'}</td>
                     <td class="td-actions">
                       <button class="btn-sm btn-outline" onclick="renderDetalleVisionaria('${v.id}')">Ver perfil</button>
