@@ -2689,7 +2689,7 @@ async function renderFinanciero() {
   main.innerHTML = `<div class="fin-loading"><div class="spinner"></div> Calculando resumen…</div>`;
 
   try {
-    const [detallesR, pedidosR, vendedorasR, clientesR, prendasR, gastosR, bajasR] = await Promise.all([
+    const [detallesR, pedidosR, vendedorasR, clientesR, prendasR, gastosR, bajasR, rotacionR] = await Promise.all([
       db.from('detalle_pedidos').select('precio, pedidos(id, estado, fecha, created_at, vendedora_id, vendedoras(nombre)), prendas(precio_costo, numero, marca, fecha_adquisicion)'),
       db.from('pedidos').select('estado, created_at'),
       db.from('vendedoras').select('id, nombre, credito, nivel'),
@@ -2697,10 +2697,11 @@ async function renderFinanciero() {
       db.from('prendas').select('disponible, baja'),
       db.from('gastos').select('monto, mes, anio, categoria'),
       db.from('prendas').select('precio_costo, fecha_baja').eq('baja', true).not('fecha_baja', 'is', null),
+      db.from('ventas').select('fecha, prendas(numero, fecha_adquisicion)').not('fecha', 'is', null),
     ]);
 
     [['detalle_pedidos',detallesR],['pedidos',pedidosR],['vendedoras',vendedorasR],
-     ['clientes',clientesR],['prendas',prendasR],['gastos',gastosR],['bajas',bajasR],
+     ['clientes',clientesR],['prendas',prendasR],['gastos',gastosR],['bajas',bajasR],['rotacion',rotacionR],
     ].forEach(([n, r]) => { if (r.error) console.error(`[financiero] error en ${n}:`, r.error.message); });
 
     const detallesTodos = detallesR.data  || [];
@@ -2710,6 +2711,7 @@ async function renderFinanciero() {
     const prendas       = prendasR.data   || [];
     const gastosFin     = gastosR.data    || [];
     const bajas         = bajasR.data     || [];
+    const rotacionData  = rotacionR.data  || [];
 
     // ── Ingresos ZETINA: price_vendedora = detalle_pedidos.precio ──────────────
     const detallesPagados    = detallesTodos.filter(d =>
@@ -2825,13 +2827,16 @@ async function renderFinanciero() {
       .map(([m, d]) => ({ marca: m, margen: d.total / d.count, count: d.count }))
       .sort((a, b) => b.margen - a.margen).slice(0, 5);
 
+    // Rotación real: días entre que ZETINA adquirió la prenda (prendas.fecha_adquisicion)
+    // y que la Visionaria la vendió a su clienta (ventas.fecha).
     const rotCat = {};
     Object.keys(PREFIJOS_CAT).forEach(p => { rotCat[p] = { total: 0, count: 0 }; });
-    detallesRentab.forEach(d => {
-      if (!d.prendas?.fecha_adquisicion || !d.pedidos?.fecha) return;
-      const pf = (d.prendas.numero || '').slice(0, 3).toUpperCase();
+    rotacionData.forEach(v => {
+      const pr = v.prendas;
+      if (!pr?.fecha_adquisicion || !v.fecha) return;
+      const pf = (pr.numero || '').slice(0, 3).toUpperCase();
       if (!rotCat[pf]) return;
-      const dias = Math.max(0, Math.round((new Date(d.pedidos.fecha) - new Date(d.prendas.fecha_adquisicion)) / 86400000));
+      const dias = Math.max(0, Math.round((new Date(v.fecha) - new Date(pr.fecha_adquisicion)) / 86400000));
       rotCat[pf].total += dias; rotCat[pf].count++;
     });
     const maxMargen = Math.max(...Object.values(margenCat).map(d => d.count > 0 ? d.total / d.count : 0), 1);
