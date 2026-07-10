@@ -2331,7 +2331,7 @@ async function renderDetalleVisionaria(vendedoraId) {
     const [vendR, statsR, ventasMesR, invR, clientasR] = await Promise.all([
       db.from('vendedoras').select('id, nombre, nivel, telefono, email, credito, foto_url, created_at').eq('id', vendedoraId).single(),
       db.from('visionaria_stats').select('*').eq('vendedora_id', vendedoraId).maybeSingle(),
-      db.from('ventas').select('monto, fecha, created_at').eq('vendedora_id', vendedoraId).gte('fecha', primerDiaMes).order('fecha', { ascending: false }),
+      db.from('ventas').select('monto, fecha, created_at, prendas(nombre, descripcion_publica)').eq('vendedora_id', vendedoraId).gte('fecha', primerDiaMes).order('fecha', { ascending: false }),
       db.from('inventario_vendedoras').select('estado, prendas(id, nombre, numero, precio_costo, fotos_prendas(url, orden))').eq('vendedora_id', vendedoraId),
       db.from('clientes').select('id, nombre, telefono').eq('vendedora_id', vendedoraId).order('nombre'),
     ]);
@@ -2343,8 +2343,9 @@ async function renderDetalleVisionaria(vendedoraId) {
     const clientas  = clientasR.data  || [];
 
     const totalVentasMes  = ventasMes.reduce((s, v) => s + (+v.monto || 0), 0);
-    const prendasActivas  = invItems.filter(i => i.estado !== 'prestado' && i.estado !== 'prestada');
+    const prendasActivas   = invItems.filter(i => i.estado === 'activo');
     const prendasPrestadas = invItems.filter(i => i.estado === 'prestado' || i.estado === 'prestada');
+    const prendasVendidas  = invItems.filter(i => i.estado === 'vendido' || i.estado === 'vendida');
     const nivelBadge = { 'Básico': 'muted', 'Silver': '', 'Gold': 'warning', 'Platinum': 'accent' };
 
     const logrosCount = stats.logros != null
@@ -2389,32 +2390,38 @@ async function renderDetalleVisionaria(vendedoraId) {
           ${!ventasMes.length
             ? '<p class="text-muted" style="padding:12px 0;font-size:0.85rem">Sin ventas este mes.</p>'
             : `<div class="table-wrap"><table class="data-table">
-                <thead><tr><th>Fecha</th><th style="text-align:right">Monto</th></tr></thead>
-                <tbody>${ventasMes.map(v => `<tr>
+                <thead><tr><th>Fecha</th><th>Prenda</th><th style="text-align:right">Monto</th></tr></thead>
+                <tbody>${ventasMes.map(v => {
+                  const p = v.prendas || {};
+                  return `<tr>
                   <td>${formatDate(v.fecha || v.created_at)}</td>
+                  <td>
+                    <div>${p.nombre || '—'}</div>
+                    ${p.descripcion_publica ? `<div style="font-size:0.72rem;color:#888;line-height:1.35;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:280px">${p.descripcion_publica}</div>` : ''}
+                  </td>
                   <td style="text-align:right;font-weight:600;color:var(--success)">${formatPeso(v.monto)}</td>
-                </tr>`).join('')}</tbody>
+                </tr>`;
+                }).join('')}</tbody>
                 <tfoot><tr>
-                  <td style="padding:10px 16px;font-weight:600;color:var(--text-muted)">Total</td>
+                  <td colspan="2" style="padding:10px 16px;font-weight:600;color:var(--text-muted)">Total</td>
                   <td style="padding:10px 16px;text-align:right;font-weight:700;font-family:'Montserrat',sans-serif;color:var(--success)">${formatPeso(totalVentasMes)}</td>
                 </tr></tfoot>
               </table></div>`}
         </div>
 
+        ${prendasActivas.length ? `
         <div class="vis-section">
           <div class="vis-section-title">Prendas activas (${prendasActivas.length})</div>
-          ${!prendasActivas.length
-            ? '<p class="text-muted" style="padding:12px 0;font-size:0.85rem">Sin prendas en inventario.</p>'
-            : `<div class="vis-inv-grid">${prendasActivas.map(i => {
-                const p = i.prendas || {};
-                const foto = (p.fotos_prendas||[]).sort((a,b)=>(a.orden??0)-(b.orden??0))[0]?.url;
-                return `<div class="vis-inv-card">
-                  ${foto ? `<img src="${foto}" alt="">` : `<div class="vis-inv-thumb-empty">👚</div>`}
-                  <div class="vis-inv-name">${p.nombre || '—'}</div>
-                  <div class="vis-inv-num">${p.numero || ''}</div>
-                </div>`;
-              }).join('')}</div>`}
-        </div>
+          <div class="vis-inv-grid">${prendasActivas.map(i => {
+            const p = i.prendas || {};
+            const foto = (p.fotos_prendas||[]).sort((a,b)=>(a.orden??0)-(b.orden??0))[0]?.url;
+            return `<div class="vis-inv-card">
+              ${foto ? `<img src="${foto}" alt="">` : `<div class="vis-inv-thumb-empty">👚</div>`}
+              <div class="vis-inv-name">${p.nombre || '—'}</div>
+              <div class="vis-inv-num">${p.numero || ''}</div>
+            </div>`;
+          }).join('')}</div>
+        </div>` : ''}
 
         ${prendasPrestadas.length ? `
         <div class="vis-section">
@@ -2424,6 +2431,20 @@ async function renderDetalleVisionaria(vendedoraId) {
             const foto = (p.fotos_prendas||[]).sort((a,b)=>(a.orden??0)-(b.orden??0))[0]?.url;
             return `<div class="vis-inv-card vis-inv-card--prest">
               ${foto ? `<img src="${foto}" alt="">` : `<div class="vis-inv-thumb-empty">👗</div>`}
+              <div class="vis-inv-name">${p.nombre || '—'}</div>
+              <div class="vis-inv-num">${p.numero || ''}</div>
+            </div>`;
+          }).join('')}</div>
+        </div>` : ''}
+
+        ${prendasVendidas.length ? `
+        <div class="vis-section">
+          <div class="vis-section-title">Prendas vendidas (${prendasVendidas.length})</div>
+          <div class="vis-inv-grid">${prendasVendidas.map(i => {
+            const p = i.prendas || {};
+            const foto = (p.fotos_prendas||[]).sort((a,b)=>(a.orden??0)-(b.orden??0))[0]?.url;
+            return `<div class="vis-inv-card">
+              ${foto ? `<img src="${foto}" alt="">` : `<div class="vis-inv-thumb-empty">🛍️</div>`}
               <div class="vis-inv-name">${p.nombre || '—'}</div>
               <div class="vis-inv-num">${p.numero || ''}</div>
             </div>`;
