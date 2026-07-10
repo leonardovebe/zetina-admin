@@ -2188,7 +2188,7 @@ async function renderVendedoras() {
 
     const [vendsR, statsR, ventasMesR, invR, clientasR, prestamosR, ventasAllR] = await Promise.all([
       db.from('vendedoras').select('id, nombre, nivel, telefono, foto_url, credito').order('nombre'),
-      db.from('visionaria_stats').select('vendedora_id, puntos, puntos_historicos, puntos_temporada, nivel_actual, logros, matches_totales'),
+      db.from('visionaria_stats').select('vendedora_id, puntos_historicos, puntos_temporada, matches_historicos, matches_temporada, clientas_recurrentes, record_personal'),
       db.from('ventas').select('monto, vendedora_id').gte('fecha', primerDiaMes),
       db.from('inventario_vendedoras').select('vendedora_id, estado'),
       db.from('clientes').select('id, vendedora_id'),
