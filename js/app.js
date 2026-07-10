@@ -2188,7 +2188,7 @@ async function renderVendedoras() {
 
     const [vendsR, statsR, ventasMesR, invR, clientasR, prestamosR, ventasAllR] = await Promise.all([
       db.from('vendedoras').select('id, nombre, nivel, telefono, foto_url, credito').order('nombre'),
-      db.from('visionaria_stats').select('vendedora_id, puntos, nivel_actual, logros, matches_totales'),
+      db.from('visionaria_stats').select('vendedora_id, puntos, puntos_historicos, puntos_temporada, nivel_actual, logros, matches_totales'),
       db.from('ventas').select('monto, vendedora_id').gte('fecha', primerDiaMes),
       db.from('inventario_vendedoras').select('vendedora_id, estado'),
       db.from('clientes').select('id, vendedora_id'),
@@ -2295,7 +2295,7 @@ async function renderVendedoras() {
                       </div>
                     </td>
                     <td><span class="badge badge-${nivelBadge[v.nivel] || ''}">${v.nivel || 'Básico'}</span></td>
-                    <td>${st.puntos != null ? `<span class="vis-puntos">${st.puntos} pts</span>` : '—'}</td>
+                    <td><span class="vis-puntos">${st.puntos_historicos != null ? st.puntos_historicos : 0} pts</span></td>
                     <td style="font-weight:600;color:var(--success)">${gan > 0 ? formatPeso(gan) : '—'}</td>
                     <td>${v.credito > 0 ? `<span style="color:#855AA2;font-weight:700">${formatPeso(v.credito)}</span>` : '—'}</td>
                     <td>${invD.activas > 0 ? `<span class="vis-inv-badge">${invD.activas}</span>` : '—'}</td>
