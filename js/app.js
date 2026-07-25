@@ -4,29 +4,31 @@
 const CATEGORIAS     = ['Blusa','Pantalón','Vestido','Falda','Chamarra','Conjunto','Sudadera','Short','Zapatos','Bolsa','Accesorio','Otro'];
 const NIVELES        = ['Básico','Silver','Gold','Platinum'];
 const MEDIDAS_POR_CATEGORIA = {
-  Pantalón:  ['Cintura', 'Cadera'],  Leggings:  ['Cintura', 'Cadera'],
-  Pants:     ['Cintura', 'Cadera'],  Short:     ['Cintura', 'Cadera'],
-  Bermuda:   ['Cintura', 'Cadera'],  Jeans:     ['Cintura', 'Cadera'],
-  Blusa:     ['Busto',   'Largo'],   Camisa:    ['Busto',   'Largo'],
-  Blusón:    ['Busto',   'Largo'],   Playera:   ['Busto',   'Largo'],
-  Sudadera:  ['Busto',   'Largo'],   'Suéter':  ['Busto',   'Largo'],
-  Vestido:   ['Busto',   'Cintura'], Jumpsuit:  ['Busto',   'Cintura'],
-  Chamarra:  ['Busto',   'Largo'],   Abrigo:    ['Busto',   'Largo'],
-  Gabardina: ['Busto',   'Largo'],   Blazer:    ['Busto',   'Largo'],
-  Saco:      ['Busto',   'Largo'],   Chaleco:   ['Busto',   'Largo'],
-  Falda:     ['Cintura', 'Largo'],
+  Pantalón:  ['Cintura', 'Cadera', 'Largo de pierna'],  Leggings:  ['Cintura', 'Cadera', 'Largo de pierna'],
+  Pants:     ['Cintura', 'Cadera', 'Largo de pierna'],  Short:     ['Cintura', 'Cadera', 'Largo de pierna'],
+  Bermuda:   ['Cintura', 'Cadera', 'Largo de pierna'],  Jeans:     ['Cintura', 'Cadera', 'Largo de pierna'],
+  Blusa:     ['Busto',   'Largo',  'Hombros'],  Camisa:    ['Busto',   'Largo',  'Hombros'],
+  Blusón:    ['Busto',   'Largo',  'Hombros'],  Playera:   ['Busto',   'Largo',  'Hombros'],
+  Sudadera:  ['Busto',   'Largo',  'Hombros'],  'Suéter':  ['Busto',   'Largo',  'Hombros'],
+  Vestido:   ['Busto',   'Cintura','Cadera'],   Jumpsuit:  ['Busto',   'Cintura','Cadera'],
+  Chamarra:  ['Busto',   'Largo',  'Hombros'],  Abrigo:    ['Busto',   'Largo',  'Hombros'],
+  Gabardina: ['Busto',   'Largo',  'Hombros'],  Blazer:    ['Busto',   'Largo',  'Hombros'],
+  Saco:      ['Busto',   'Largo',  'Hombros'],  Chaleco:   ['Busto',   'Largo',  'Hombros'],
+  Falda:     ['Cintura', 'Largo',  'Cadera'],
 };
 
 function getMedidas(categoria) {
-  return MEDIDAS_POR_CATEGORIA[categoria] || ['Medida 1', 'Medida 2'];
+  return MEDIDAS_POR_CATEGORIA[categoria] || ['Medida 1', 'Medida 2', 'Medida 3'];
 }
 
 function actualizarLabelesMedidas(prefix, categoria) {
-  const [m1, m2] = getMedidas(categoria === '__nueva__' ? '' : (categoria || ''));
+  const [m1, m2, m3] = getMedidas(categoria === '__nueva__' ? '' : (categoria || ''));
   const l1 = document.getElementById(`${prefix}Medida1Label`);
   const l2 = document.getElementById(`${prefix}Medida2Label`);
+  const l3 = document.getElementById(`${prefix}Medida3Label`);
   if (l1) l1.textContent = `${m1} (cm)`;
   if (l2) l2.textContent = `${m2} (cm)`;
+  if (l3) l3.textContent = `${m3} (cm)`;
 }
 
 const CATEGORIAS_GASTOS = [
@@ -264,6 +266,10 @@ async function renderPrendas() {
             <div class="form-group">
               <label id="fMedida2Label">Medida 2 (cm)</label>
               <input type="number" id="fMedida2Valor" min="0" step="0.5" placeholder="0">
+            </div>
+            <div class="form-group">
+              <label id="fMedida3Label">Medida 3 (cm)</label>
+              <input type="number" id="fMedida3Valor" min="0" step="0.5" placeholder="0">
             </div>
           </div>
         </div>
@@ -873,6 +879,8 @@ async function handlePrendaSubmit(e) {
       medida_1_valor:    parseFloat(document.getElementById('fMedida1Valor').value) || null,
       medida_2_nombre:   getMedidas(cat)[1],
       medida_2_valor:    parseFloat(document.getElementById('fMedida2Valor').value) || null,
+      medida_3_nombre:   getMedidas(cat)[2],
+      medida_3_valor:    parseFloat(document.getElementById('fMedida3Valor').value) || null,
       precio_costo:      parseFloat(document.getElementById('fPrecioCosto').value)     || 0,
       precio_min:        parseFloat(document.getElementById('fPrecioMin').value)     || 0,
       precio_vendedora:  parseFloat(document.getElementById('fPrecioVendedora').value) || 0,
@@ -1263,7 +1271,7 @@ async function abrirEditarPrenda(id) {
 
   // Try fetching with optional columns (numero, categoria); fall back if they don't exist yet
   let p, hasExtras = true;
-  const fullSel = 'id, nombre, marca, color, categoria, departamento, numero, emoji, gradiente, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, descripcion_publica, fotos_prendas(id, url, orden)';
+  const fullSel = 'id, nombre, marca, color, categoria, departamento, numero, emoji, gradiente, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, medida_3_nombre, medida_3_valor, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, descripcion_publica, fotos_prendas(id, url, orden)';
   const safeSel = 'id, nombre, marca, color, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url, orden)';
 
   let { data, error } = await db.from('prendas').select(fullSel).eq('id', id).single();
@@ -1416,6 +1424,10 @@ async function abrirEditarPrenda(id) {
           <div class="form-group">
             <label id="eMedida2Label">${escHtml(p.medida_2_nombre || getMedidas(p.categoria || '')[1])} (cm)</label>
             <input type="number" id="eMedida2Valor" min="0" step="0.5" value="${p.medida_2_valor != null ? p.medida_2_valor : ''}" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label id="eMedida3Label">${escHtml(p.medida_3_nombre || getMedidas(p.categoria || '')[2])} (cm)</label>
+            <input type="number" id="eMedida3Valor" min="0" step="0.5" value="${p.medida_3_valor != null ? p.medida_3_valor : ''}" placeholder="0">
           </div>
         </div>
       </div>
@@ -1763,6 +1775,8 @@ async function guardarEditPrenda(id, hasExtras) {
       medida_1_valor:  parseFloat(document.getElementById('eMedida1Valor')?.value) || null,
       medida_2_nombre: (document.getElementById('eMedida2Label')?.textContent || '').replace(' (cm)', '') || null,
       medida_2_valor:  parseFloat(document.getElementById('eMedida2Valor')?.value) || null,
+      medida_3_nombre: (document.getElementById('eMedida3Label')?.textContent || '').replace(' (cm)', '') || null,
+      medida_3_valor:  parseFloat(document.getElementById('eMedida3Valor')?.value) || null,
       precio_costo:     parseFloat(document.getElementById('eCosto').value)          || 0,
       precio_min:       parseFloat(document.getElementById('ePrecioMin').value)      || 0,
       precio_vendedora: parseFloat(document.getElementById('ePrecioVendedora').value) || 0,
