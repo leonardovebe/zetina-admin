@@ -76,6 +76,7 @@ function closeModal() {
 // ── Navegación ────────────────────────────────────────────────────────────────
 const SECTION_TITLES = {
   financiero:   'Resumen Financiero',
+  asistente:    'Asistente IA',
   prendas:      'Subir Prendas',
   inventario:   'Inventario',
   pedidos:      'Pedidos',
@@ -103,7 +104,7 @@ function navigate(section) {
 
   if (section === 'pedidos') updatePedidosBadge(0);
 
-  const renders = { financiero: renderFinanciero, prendas: renderPrendas,
+  const renders = { financiero: renderFinanciero, asistente: renderAsistente, prendas: renderPrendas,
     inventario: renderInventario, pedidos: renderPedidos,
     vendedoras: renderVendedoras, clientes: renderClientes,
     devoluciones: renderDevoluciones, gastos: renderGastos, categorias: renderCategorias };
@@ -2678,6 +2679,156 @@ async function loadClientes() {
 
   } catch (err) {
     listEl.innerHTML = `<div class="error-state">Error: ${err.message}</div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  SECCIÓN: ASISTENTE IA
+// ══════════════════════════════════════════════════════════════════════════════
+let _chatHistory = [];   // [{ role: 'user'|'assistant', content }]
+let _chatEnviando = false;
+
+// Markdown mínimo → HTML (negritas, listas, saltos de línea). Escapa primero.
+function _chatFormat(txt) {
+  let s = escHtml(txt);
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/^\s*[-•]\s+(.*)$/gm, '<li>$1</li>');
+  s = s.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>').replace(/<\/ul>\s*<ul>/g, '');
+  s = s.replace(/\n/g, '<br>');
+  return s;
+}
+
+function renderAsistente() {
+  const main = document.getElementById('sectionContent');
+  main.innerHTML = `
+    <div class="chat-wrap">
+      <div class="chat-toolbar">
+        <div class="chat-toolbar-info">
+          <span class="chat-dot"></span>
+          <span>Asistente conectado a los datos de ZETINA en tiempo real</span>
+        </div>
+        <button class="btn btn-outline btn-sm" id="chatNuevaConv">Nueva conversación</button>
+      </div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <form class="chat-input-bar" id="chatForm">
+        <input type="text" id="chatInput" class="chat-input" autocomplete="off"
+          placeholder="Pregunta lo que necesites… ej. ¿Cómo vamos este mes?">
+        <button type="submit" class="chat-send-btn" id="chatSend" aria-label="Enviar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:18px;height:18px">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </form>
+    </div>`;
+
+  document.getElementById('chatForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const input = document.getElementById('chatInput');
+    const txt = input.value.trim();
+    if (!txt || _chatEnviando) return;
+    input.value = '';
+    _chatEnviar(txt);
+  });
+  document.getElementById('chatNuevaConv').addEventListener('click', () => {
+    _chatHistory = [];
+    document.getElementById('chatMessages').innerHTML = '';
+    _chatBienvenida();
+  });
+
+  // Si ya había conversación (volver a la sección), la repintamos; si no, bienvenida.
+  if (_chatHistory.length) {
+    _chatHistory.forEach(m => _chatPintarMensaje(m.role, m.content));
+    _chatScroll();
+  } else {
+    _chatBienvenida();
+  }
+}
+
+function _chatPintarMensaje(role, content) {
+  const cont = document.getElementById('chatMessages');
+  if (!cont) return;
+  const div = document.createElement('div');
+  div.className = `chat-msg chat-msg--${role === 'user' ? 'user' : 'ai'}`;
+  div.innerHTML = `<div class="chat-bubble">${role === 'user' ? escHtml(content) : _chatFormat(content)}</div>`;
+  cont.appendChild(div);
+}
+
+function _chatScroll() {
+  const cont = document.getElementById('chatMessages');
+  if (cont) cont.scrollTop = cont.scrollHeight;
+}
+
+function _chatTyping(show) {
+  const cont = document.getElementById('chatMessages');
+  if (!cont) return;
+  let el = document.getElementById('chatTyping');
+  if (show) {
+    if (el) return;
+    el = document.createElement('div');
+    el.id = 'chatTyping';
+    el.className = 'chat-msg chat-msg--ai';
+    el.innerHTML = `<div class="chat-bubble chat-typing"><span></span><span></span><span></span></div>`;
+    cont.appendChild(el);
+    _chatScroll();
+  } else if (el) {
+    el.remove();
+  }
+}
+
+async function _chatBienvenida() {
+  _chatEnviando = true;
+  _chatTyping(true);
+  try {
+    const res = await fetch('/api/chat-financiero', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [], contexto: {} }),
+    });
+    const data = await res.json();
+    _chatTyping(false);
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+    _chatHistory.push({ role: 'assistant', content: data.reply });
+    _chatPintarMensaje('assistant', data.reply);
+    _chatScroll();
+  } catch (err) {
+    _chatTyping(false);
+    _chatPintarMensaje('assistant', `No pude cargar el resumen: ${err.message}`);
+  } finally {
+    _chatEnviando = false;
+  }
+}
+
+async function _chatEnviar(texto) {
+  _chatEnviando = true;
+  document.getElementById('chatSend').disabled = true;
+
+  _chatHistory.push({ role: 'user', content: texto });
+  _chatPintarMensaje('user', texto);
+  _chatScroll();
+  _chatTyping(true);
+
+  try {
+    const res = await fetch('/api/chat-financiero', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: _chatHistory, contexto: {} }),
+    });
+    const data = await res.json();
+    _chatTyping(false);
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+    _chatHistory.push({ role: 'assistant', content: data.reply });
+    _chatPintarMensaje('assistant', data.reply);
+    _chatScroll();
+  } catch (err) {
+    _chatTyping(false);
+    _chatPintarMensaje('assistant', `Error: ${err.message}`);
+    _chatScroll();
+  } finally {
+    _chatEnviando = false;
+    const sendBtn = document.getElementById('chatSend');
+    if (sendBtn) sendBtn.disabled = false;
+    const input = document.getElementById('chatInput');
+    if (input) input.focus();
   }
 }
 
