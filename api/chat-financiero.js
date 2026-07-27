@@ -28,77 +28,186 @@ const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto'
 async function construirContexto() {
   const now       = new Date();
   const mesActual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const mesNum    = now.getMonth() + 1;
-  const anioNum   = now.getFullYear();
+  const mesDe     = s => (s || '').toString().slice(0, 7);
 
-  const [detalles, gastos, ventas, vendedoras, prendasDisp, devoluciones] = await Promise.all([
-    sb('detalle_pedidos?select=precio,pedidos(estado,fecha,created_at,vendedora_id)'),
-    sb('gastos?select=monto,mes,anio,categoria'),
-    sb('ventas?select=monto,vendedora_id,fecha'),
-    sb('vendedoras?select=id,nombre,credito'),
-    sb('prendas?select=nombre,numero,fecha_adquisicion&disponible=eq.true&baja=eq.false&order=fecha_adquisicion.asc&limit=15'),
-    sb('devoluciones?select=estado'),
+  const [
+    vendedoras, prendas, ventas, abonos, pedidos, detalles,
+    devoluciones, gastos, clientes, invVis, prestamos, stats, interacciones,
+  ] = await Promise.all([
+    sb('vendedoras?select=id,nombre,credito,slug'),
+    sb('prendas?select=id,numero,nombre,marca,categoria,precio_costo,precio_vendedora,precio_min,precio_max,disponible,baja,fecha_adquisicion,fecha_baja,motivo_baja'),
+    sb('ventas?select=id,vendedora_id,cliente_id,prenda_id,monto,fecha,estado,nombre_prenda,marca'),
+    sb('abonos?select=id,vendedora_id,cliente_id,monto,fecha'),
+    sb('pedidos?select=id,vendedora_id,estado,created_at,credito_aplicado'),
+    sb('detalle_pedidos?select=id,pedido_id,prenda_id,precio'),
+    sb('devoluciones?select=id,vendedora_id,prenda_id,estado,motivo,created_at,prendas(precio_vendedora,nombre)'),
+    sb('gastos?select=id,categoria,subcategoria,monto,fecha'),
+    sb('clientes?select=id,vendedora_id,nombre,talla_ropa,talla_pantalon'),
+    sb('inventario_vendedoras?select=id,vendedora_id,prenda_id,estado,fecha_entrega'),
+    sb('prestamos?select=id,vendedora_id,prenda_id,clienta_id,estado,fecha_devolucion'),
+    sb('visionaria_stats?select=vendedora_id,puntos_historicos,puntos_temporada,matches_historicos,matches_temporada'),
+    sb('interacciones_clienta?select=id,vendedora_id,clienta_id,prenda_id,resultado,fecha'),
   ]);
 
-  // ── Ingresos (detalle_pedidos de pedidos Pagado/Entregado) ──
-  const pagados = detalles.filter(d => d.pedidos?.estado === 'Pagado' || d.pedidos?.estado === 'Entregado');
-  const _mesPed = d => (d.pedidos?.fecha || d.pedidos?.created_at || '').slice(0, 7);
-  const ingresosHistoricos = pagados.reduce((s, d) => s + (+d.precio || 0), 0);
-  const ingresosMes        = pagados.filter(d => _mesPed(d) === mesActual).reduce((s, d) => s + (+d.precio || 0), 0);
-  const porCobrar          = detalles
-    .filter(d => d.pedidos?.estado === 'En proceso' || d.pedidos?.estado === 'En camino')
-    .reduce((s, d) => s + (+d.precio || 0), 0);
+  const nombreVis  = Object.fromEntries(vendedoras.map(v => [v.id, v.nombre || 'Sin nombre']));
+  const statsPorVis = Object.fromEntries(stats.map(s => [s.vendedora_id, s]));
 
-  // ── Gastos del mes (total y por categoría) ──
-  const gastosMesArr   = gastos.filter(g => g.mes === mesNum && g.anio === anioNum);
-  const gastosMes      = gastosMesArr.reduce((s, g) => s + (+g.monto || 0), 0);
-  const gastosPorCat   = {};
+  // ── INGRESOS ZETINA (detalle_pedidos de pedidos Pagado/Entregado) ──
+  const pedidoPorId = Object.fromEntries(pedidos.map(p => [p.id, p]));
+  const detCon   = detalles.map(d => ({ ...d, pedido: pedidoPorId[d.pedido_id] }));
+  const esPagado = ped => ped && (ped.estado === 'Pagado' || ped.estado === 'Entregado');
+  const enCurso  = ped => ped && (ped.estado === 'En proceso' || ped.estado === 'En camino');
+  const ingresosHistoricos = detCon.filter(d => esPagado(d.pedido)).reduce((s, d) => s + (+d.precio || 0), 0);
+  const ingresosMes        = detCon.filter(d => esPagado(d.pedido) && mesDe(d.pedido.created_at) === mesActual).reduce((s, d) => s + (+d.precio || 0), 0);
+  const porCobrar          = detCon.filter(d => enCurso(d.pedido)).reduce((s, d) => s + (+d.precio || 0), 0);
+
+  // ── VENTAS a clientas ──
+  const ventasHist = ventas.reduce((s, v) => s + (+v.monto || 0), 0);
+  const ventasMes  = ventas.filter(v => mesDe(v.fecha) === mesActual).reduce((s, v) => s + (+v.monto || 0), 0);
+
+  // ── GASTOS ──
+  const gastosMesArr = gastos.filter(g => mesDe(g.fecha) === mesActual);
+  const gastosMes    = gastosMesArr.reduce((s, g) => s + (+g.monto || 0), 0);
+  const gastosHist   = gastos.reduce((s, g) => s + (+g.monto || 0), 0);
+  const gastosPorCat = {};
   gastosMesArr.forEach(g => { const c = g.categoria || 'Sin categoría'; gastosPorCat[c] = (gastosPorCat[c] || 0) + (+g.monto || 0); });
 
-  // ── Top Visionarias por ingresos (de ventas) ──
-  const nombreVis = Object.fromEntries(vendedoras.map(v => [v.id, v.nombre]));
-  const ventasPorVis = {};
-  ventas.forEach(v => { const n = nombreVis[v.vendedora_id] || 'Sin asignar'; ventasPorVis[n] = (ventasPorVis[n] || 0) + (+v.monto || 0); });
-  const topVis = Object.entries(ventasPorVis).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  // ── INVENTARIO ──
+  const disponibles = prendas.filter(p => p.disponible && !p.baja);
+  const vendidas    = prendas.filter(p => !p.disponible && !p.baja);
+  const bajas       = prendas.filter(p => p.baja);
+  const bajasPorMotivo = {};
+  bajas.forEach(p => { const m = p.motivo_baja || 'Sin motivo'; bajasPorMotivo[m] = (bajasPorMotivo[m] || 0) + 1; });
+  const invPorEstado = {};
+  invVis.forEach(i => { const e = i.estado || 'Sin estado'; invPorEstado[e] = (invPorEstado[e] || 0) + 1; });
+  const enVisionarias = invVis.filter(i => !/(devuelt|vendid)/i.test(i.estado || '')).length;
+  const oldest = disponibles
+    .filter(p => p.fecha_adquisicion)
+    .sort((a, b) => new Date(a.fecha_adquisicion) - new Date(b.fecha_adquisicion))
+    .slice(0, 12);
 
-  // ── Otros KPIs ──
+  // ── DEVOLUCIONES ──
+  const devPorEstado = {};
+  const devPorVis    = {};
+  const devPorMes    = {};
+  const devCountPorVisId = {};
+  devoluciones.forEach(d => {
+    const e = d.estado || 'Sin estado';        devPorEstado[e] = (devPorEstado[e] || 0) + 1;
+    const n = nombreVis[d.vendedora_id] || 'Sin asignar'; devPorVis[n] = (devPorVis[n] || 0) + 1;
+    const m = mesDe(d.created_at) || 'Sin fecha'; devPorMes[m] = (devPorMes[m] || 0) + 1;
+    devCountPorVisId[d.vendedora_id] = (devCountPorVisId[d.vendedora_id] || 0) + 1;
+  });
+
+  // ── VISIONARIAS (ventas del mes, puntos, devoluciones, crédito) ──
+  const ventasMesPorVis = {};
+  ventas.filter(v => mesDe(v.fecha) === mesActual).forEach(v => { ventasMesPorVis[v.vendedora_id] = (ventasMesPorVis[v.vendedora_id] || 0) + (+v.monto || 0); });
+  const visionarias = vendedoras.map(v => ({
+    nombre: v.nombre || 'Sin nombre',
+    ventasMes: ventasMesPorVis[v.id] || 0,
+    puntos: statsPorVis[v.id]?.puntos_historicos ?? 0,
+    devoluciones: devCountPorVisId[v.id] || 0,
+    credito: +v.credito || 0,
+  })).sort((a, b) => b.ventasMes - a.ventasMes);
+
+  // ── CLIENTES (total y con saldo pendiente) ──
+  const cargoPorCliente = {};
+  ventas.forEach(v => { if (v.cliente_id != null) cargoPorCliente[v.cliente_id] = (cargoPorCliente[v.cliente_id] || 0) + (+v.monto || 0); });
+  const abonoPorCliente = {};
+  abonos.forEach(a => { if (a.cliente_id != null) abonoPorCliente[a.cliente_id] = (abonoPorCliente[a.cliente_id] || 0) + (+a.monto || 0); });
+  const clientesConSaldo   = clientes.filter(c => ((cargoPorCliente[c.id] || 0) - (abonoPorCliente[c.id] || 0)) > 0).length;
+  const saldoTotalClientes = clientes.reduce((s, c) => s + Math.max(0, (cargoPorCliente[c.id] || 0) - (abonoPorCliente[c.id] || 0)), 0);
+
+  // ── PRÉSTAMOS ──
+  const prestamosActivos = prestamos.filter(p => !/(devuelt|finaliz|cerrad)/i.test(p.estado || '') && !p.fecha_devolucion);
+  const prestPorEstado = {};
+  prestamos.forEach(p => { const e = p.estado || 'Sin estado'; prestPorEstado[e] = (prestPorEstado[e] || 0) + 1; });
+
+  // ── OTROS ──
   const creditosEmitidos = vendedoras.reduce((s, v) => s + (+v.credito || 0), 0);
-  const devAprobadas     = devoluciones.filter(d => d.estado === 'Aprobada').length;
+  const intPorResultado = {};
+  interacciones.forEach(i => { const r = i.resultado || 'Sin resultado'; intPorResultado[r] = (intPorResultado[r] || 0) + 1; });
 
-  const lineas = [];
-  lineas.push(`FECHA ACTUAL: ${MESES[now.getMonth()]} ${anioNum}`);
-  lineas.push('');
-  lineas.push('INGRESOS ZETINA (precio pagado por las Visionarias):');
-  lineas.push(`- Ingresos del mes: ${MXN(ingresosMes)}`);
-  lineas.push(`- Ingresos históricos: ${MXN(ingresosHistoricos)}`);
-  lineas.push(`- Por cobrar (pedidos en proceso/en camino): ${MXN(porCobrar)}`);
-  lineas.push('');
-  lineas.push('GASTOS:');
-  lineas.push(`- Gastos del mes: ${MXN(gastosMes)}`);
-  if (Object.keys(gastosPorCat).length) {
-    Object.entries(gastosPorCat).sort((a, b) => b[1] - a[1]).forEach(([c, m]) => lineas.push(`  · ${c}: ${MXN(m)}`));
+  // ── Construir texto ──
+  const L = [];
+  L.push(`FECHA ACTUAL: ${MESES[now.getMonth()]} ${now.getFullYear()}`);
+  L.push('');
+  L.push('=== RESUMEN DEL NEGOCIO ===');
+  L.push(`- Ventas a clientas (mes): ${MXN(ventasMes)}`);
+  L.push(`- Ventas a clientas (histórico): ${MXN(ventasHist)}`);
+  L.push(`- Ingresos ZETINA / pagado por Visionarias (mes): ${MXN(ingresosMes)}`);
+  L.push(`- Ingresos ZETINA (histórico): ${MXN(ingresosHistoricos)}`);
+  L.push(`- Por cobrar a Visionarias (pedidos en proceso/en camino): ${MXN(porCobrar)}`);
+  L.push(`- Gastos (mes): ${MXN(gastosMes)}`);
+  L.push(`- Ganancia neta del mes (ingresos − gastos): ${MXN(ingresosMes - gastosMes)}`);
+  L.push('');
+  L.push('=== INVENTARIO ===');
+  L.push(`- Disponibles en catálogo: ${disponibles.length}`);
+  L.push(`- En visionarias (entregadas/en poder): ${enVisionarias}`);
+  L.push(`- Vendidas: ${vendidas.length}`);
+  L.push(`- Bajas: ${bajas.length}`);
+  if (Object.keys(bajasPorMotivo).length) {
+    Object.entries(bajasPorMotivo).sort((a, b) => b[1] - a[1]).forEach(([m, n]) => L.push(`  · baja "${m}": ${n}`));
   }
-  lineas.push(`- Ganancia neta del mes (ingresos − gastos): ${MXN(ingresosMes - gastosMes)}`);
-  lineas.push('');
-  lineas.push('TOP VISIONARIAS POR VENTAS (a sus clientas):');
-  if (topVis.length) topVis.forEach(([n, m], i) => lineas.push(`  ${i + 1}. ${n}: ${MXN(m)}`));
-  else lineas.push('  (sin ventas registradas)');
-  lineas.push('');
-  lineas.push('INVENTARIO:');
-  lineas.push(`- Prendas disponibles en catálogo: ${prendasDisp.length}${prendasDisp.length === 15 ? '+ (mostrando las 15 más antiguas)' : ''}`);
-  lineas.push('- Prendas más antiguas sin venderse (fecha de adquisición):');
-  if (prendasDisp.length) {
-    prendasDisp.forEach(p => {
-      const dias = p.fecha_adquisicion ? Math.max(0, Math.round((now - new Date(p.fecha_adquisicion)) / 86400000)) : null;
-      lineas.push(`  · ${p.numero || 's/n'} ${p.nombre || ''} — ${dias != null ? dias + ' días en inventario' : 'sin fecha'}`);
+  if (Object.keys(invPorEstado).length) {
+    L.push('- Inventario en visionarias por estado:');
+    Object.entries(invPorEstado).sort((a, b) => b[1] - a[1]).forEach(([e, n]) => L.push(`  · ${e}: ${n}`));
+  }
+  L.push('- Prendas más antiguas sin venderse (por fecha de adquisición):');
+  if (oldest.length) {
+    oldest.forEach(p => {
+      const dias = Math.max(0, Math.round((now - new Date(p.fecha_adquisicion)) / 86400000));
+      L.push(`  · ${p.numero || 's/n'} ${p.nombre || ''}${p.categoria ? ' (' + p.categoria + ')' : ''} — ${dias} días en inventario`);
     });
-  } else lineas.push('  (sin prendas disponibles)');
-  lineas.push('');
-  lineas.push('OTROS:');
-  lineas.push(`- Créditos emitidos a Visionarias (saldo a favor por devoluciones): ${MXN(creditosEmitidos)}`);
-  lineas.push(`- Devoluciones aprobadas (histórico): ${devAprobadas}`);
+  } else L.push('  (sin prendas disponibles con fecha)');
+  L.push('');
+  L.push('=== VISIONARIAS (ordenadas por ventas del mes) ===');
+  if (visionarias.length) {
+    visionarias.slice(0, 15).forEach((v, i) => L.push(`  ${i + 1}. ${v.nombre} — ventas mes: ${MXN(v.ventasMes)} · puntos: ${v.puntos} · devoluciones: ${v.devoluciones} · crédito: ${MXN(v.credito)}`));
+  } else L.push('  (sin visionarias registradas)');
+  L.push('');
+  L.push('=== DEVOLUCIONES ===');
+  L.push(`- Total: ${devoluciones.length}`);
+  if (Object.keys(devPorEstado).length) {
+    L.push('- Por estado:');
+    Object.entries(devPorEstado).sort((a, b) => b[1] - a[1]).forEach(([e, n]) => L.push(`  · ${e}: ${n}`));
+  }
+  if (Object.keys(devPorVis).length) {
+    L.push('- Por visionaria:');
+    Object.entries(devPorVis).sort((a, b) => b[1] - a[1]).slice(0, 10).forEach(([n, c]) => L.push(`  · ${n}: ${c}`));
+  }
+  if (Object.keys(devPorMes).length) {
+    L.push('- Por mes:');
+    Object.entries(devPorMes).sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, 6).forEach(([m, c]) => L.push(`  · ${m}: ${c}`));
+  }
+  L.push('');
+  L.push('=== CLIENTES ===');
+  L.push(`- Total de clientes: ${clientes.length}`);
+  L.push(`- Con saldo pendiente: ${clientesConSaldo}`);
+  L.push(`- Saldo pendiente total (ventas − abonos): ${MXN(saldoTotalClientes)}`);
+  L.push('');
+  L.push('=== GASTOS ===');
+  L.push(`- Gastos del mes: ${MXN(gastosMes)}`);
+  L.push(`- Gastos históricos: ${MXN(gastosHist)}`);
+  if (Object.keys(gastosPorCat).length) {
+    L.push('- Del mes por categoría:');
+    Object.entries(gastosPorCat).sort((a, b) => b[1] - a[1]).forEach(([c, m]) => L.push(`  · ${c}: ${MXN(m)}`));
+  }
+  L.push('');
+  L.push('=== PRÉSTAMOS ACTIVOS ===');
+  L.push(`- Préstamos activos (sin devolver): ${prestamosActivos.length}`);
+  if (Object.keys(prestPorEstado).length) {
+    L.push('- Todos por estado:');
+    Object.entries(prestPorEstado).sort((a, b) => b[1] - a[1]).forEach(([e, n]) => L.push(`  · ${e}: ${n}`));
+  }
+  L.push('');
+  L.push('=== CRÉDITO E INTERACCIONES ===');
+  L.push(`- Créditos emitidos a Visionarias (saldo a favor por devoluciones): ${MXN(creditosEmitidos)}`);
+  if (Object.keys(intPorResultado).length) {
+    L.push('- Interacciones con clientas por resultado:');
+    Object.entries(intPorResultado).sort((a, b) => b[1] - a[1]).forEach(([r, n]) => L.push(`  · ${r}: ${n}`));
+  }
 
-  return lineas.join('\n');
+  return L.join('\n');
 }
 
 module.exports = async function handler(req, res) {
