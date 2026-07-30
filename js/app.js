@@ -2343,12 +2343,13 @@ async function renderDetalleVisionaria(vendedoraId) {
     const now = new Date();
     const primerDiaMes = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
 
-    const [vendR, statsR, ventasMesR, invR, clientasR] = await Promise.all([
+    const [vendR, statsR, ventasMesR, invR, clientasR, ventasClientasR] = await Promise.all([
       db.from('vendedoras').select('id, nombre, nivel, telefono, email, credito, foto_url, created_at').eq('id', vendedoraId).single(),
       db.from('visionaria_stats').select('*').eq('vendedora_id', vendedoraId).maybeSingle(),
       db.from('ventas').select('monto, fecha, created_at, prendas(nombre, descripcion_publica)').eq('vendedora_id', vendedoraId).gte('fecha', primerDiaMes).order('fecha', { ascending: false }),
       db.from('inventario_vendedoras').select('estado, prendas(id, nombre, numero, precio_costo, fotos_prendas(url, orden))').eq('vendedora_id', vendedoraId),
       db.from('clientes').select('id, nombre, telefono').eq('vendedora_id', vendedoraId).order('nombre'),
+      db.from('ventas').select('cliente_id, monto').eq('vendedora_id', vendedoraId),
     ]);
 
     const vend      = vendR.data      || {};
@@ -2356,6 +2357,17 @@ async function renderDetalleVisionaria(vendedoraId) {
     const ventasMes = ventasMesR.data || [];
     const invItems  = invR.data       || [];
     const clientas  = clientasR.data  || [];
+
+    // Ventas agrupadas por clienta (nº de prendas vendidas y total gastado).
+    const ventasPorClienta = {};
+    (ventasClientasR.data || []).forEach(v => {
+      if (v.cliente_id == null) return;
+      const agg = ventasPorClienta[v.cliente_id] || (ventasPorClienta[v.cliente_id] = { total_prendas: 0, total_gastado: 0 });
+      agg.total_prendas += 1;
+      agg.total_gastado += (+v.monto || 0);
+    });
+    const clientasOrdenadas = [...clientas].sort((a, b) =>
+      (ventasPorClienta[b.id]?.total_prendas || 0) - (ventasPorClienta[a.id]?.total_prendas || 0));
 
     const totalVentasMes  = ventasMes.reduce((s, v) => s + (+v.monto || 0), 0);
     const prendasActivas   = invItems.filter(i => i.estado === 'activo');
@@ -2471,11 +2483,16 @@ async function renderDetalleVisionaria(vendedoraId) {
           ${!clientas.length
             ? '<p class="text-muted" style="padding:12px 0;font-size:0.85rem">Sin clientas registradas.</p>'
             : `<div class="table-wrap"><table class="data-table">
-                <thead><tr><th>Nombre</th><th>Teléfono</th></tr></thead>
-                <tbody>${clientas.map(c => `<tr>
+                <thead><tr><th>Nombre</th><th>Teléfono</th><th style="text-align:right">Prendas</th><th style="text-align:right">Total gastado</th></tr></thead>
+                <tbody>${clientasOrdenadas.map(c => {
+                  const agg = ventasPorClienta[c.id] || { total_prendas: 0, total_gastado: 0 };
+                  return `<tr>
                   <td class="td-name">${c.nombre}</td>
                   <td>${c.telefono || '—'}</td>
-                </tr>`).join('')}</tbody>
+                  <td style="text-align:right;font-weight:600">${agg.total_prendas} ${agg.total_prendas === 1 ? 'prenda' : 'prendas'}</td>
+                  <td style="text-align:right;font-weight:600;color:var(--success)">${formatPeso(agg.total_gastado)}</td>
+                </tr>`;
+                }).join('')}</tbody>
               </table></div>`}
         </div>
       </div>`;
