@@ -238,6 +238,13 @@ async function construirContexto() {
     Object.entries(intPorResultado).sort((a, b) => b[1] - a[1]).forEach(([r, n]) => L.push(`  · ${r}: ${n}`));
   }
 
+  L.push('');
+  L.push('=== DEBUG ===');
+  L.push(`- ventas cargadas: ${ventas.length}`);
+  L.push(`- clientes cargados: ${clientes.length}`);
+  L.push(`- ventas con cliente_id: ${ventas.filter(v => v.cliente_id != null).length}`);
+  L.push(`- top5 clientas: ${topClientas.map(c => c.nombre).join(', ') || 'ninguna'}`);
+
   return L.join('\n');
 }
 
