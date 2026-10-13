@@ -3344,24 +3344,24 @@ async function renderResultados() {
       </div>
       <div class="fin-grid">
         <div class="kpi-card ${_card(_brutaV(a))}">
-          <div class="kpi-label">Ganancia bruta · vendido</div>
+          <div class="kpi-label">Ganancia total</div>
           <div class="kpi-value ${_cls(_brutaV(a))}">${formatPeso(_brutaV(a))}</div>
           <div class="kpi-sub">Vendido − Pacas</div>
         </div>
         <div class="kpi-card ${_card(_brutaC(a))}">
-          <div class="kpi-label">Ganancia bruta · cobrado</div>
+          <div class="kpi-label">Ganancia parcial</div>
           <div class="kpi-value ${_cls(_brutaC(a))}">${formatPeso(_brutaC(a))}</div>
           <div class="kpi-sub">Cobrado − Pacas</div>
         </div>
         <div class="kpi-card ${_card(netaV)}">
-          <div class="kpi-label">Ganancia neta · vendido</div>
+          <div class="kpi-label">Ganancia neta total</div>
           <div class="kpi-value ${_cls(netaV)}">${formatPeso(netaV)}</div>
-          <div class="kpi-sub">Bruta vendido − Gastos</div>
+          <div class="kpi-sub">Ganancia total − Gastos</div>
         </div>
         <div class="kpi-card ${_card(netaC)}">
-          <div class="kpi-label">Ganancia neta · cobrado</div>
+          <div class="kpi-label">Ganancia neta parcial</div>
           <div class="kpi-value ${_cls(netaC)}">${formatPeso(netaC)}</div>
-          <div class="kpi-sub">Bruta cobrado − Gastos</div>
+          <div class="kpi-sub">Ganancia parcial − Gastos</div>
         </div>
       </div>`;
     };
@@ -3374,7 +3374,7 @@ async function renderResultados() {
           <table class="data-table rn-table">
             <thead><tr>
               <th>Visionaria</th><th>Vendido</th><th>Cobrado</th><th>Por cobrar</th><th>Costo prendas</th>
-              <th>Bruta · vendido</th><th>Bruta · cobrado</th><th>Margen</th>
+              <th>Ganancia total</th><th>Ganancia parcial</th><th>Margen</th>
             </tr></thead>
             <tbody>
               ${filas.map(f => `<tr>
@@ -3478,7 +3478,7 @@ async function renderResultados() {
           <table class="data-table rn-table">
             <thead><tr>
               <th>Mes</th><th>Vendido</th><th>Cobrado</th><th>Por cobrar</th><th>Costo (pacas)</th><th>Gastos operativos</th>
-              <th>Bruta · vendido</th><th>Bruta · cobrado</th><th>Neta · vendido</th><th>Neta · cobrado</th>
+              <th>Ganancia total</th><th>Ganancia parcial</th><th>Ganancia neta total</th><th>Ganancia neta parcial</th>
             </tr></thead>
             <tbody>
               ${meses6.slice().reverse().map(m => {
