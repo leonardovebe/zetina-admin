@@ -3215,20 +3215,23 @@ async function renderResultados() {
   main.innerHTML = `<div class="fin-loading"><div class="spinner"></div> Calculando resultados…</div>`;
 
   try {
-    const [ventasR, gastosR, vendedorasR, abonosR] = await Promise.all([
-      db.from('ventas').select('monto, fecha, vendedora_id, prendas(precio_costo, categoria, marca, numero)'),
+    const [ventasR, gastosR, vendedorasR, abonosR, clientesR] = await Promise.all([
+      db.from('ventas').select('monto, fecha, vendedora_id, cliente_id, nombre_prenda, prendas(precio_costo, categoria, marca, numero)'),
       db.from('gastos').select('monto, categoria, fecha, mes, anio'),
       db.from('vendedoras').select('id, nombre'),
       db.from('abonos').select('vendedora_id, monto, fecha'),
+      db.from('clientes').select('id, nombre'),
     ]);
-    [['ventas',ventasR],['gastos',gastosR],['vendedoras',vendedorasR],['abonos',abonosR]]
+    [['ventas',ventasR],['gastos',gastosR],['vendedoras',vendedorasR],['abonos',abonosR],['clientes',clientesR]]
       .forEach(([n, r]) => { if (r.error) console.error(`[resultados] error en ${n}:`, r.error.message); });
 
     const ventas     = ventasR.data     || [];
     const gastos     = gastosR.data     || [];
     const vendedoras = vendedorasR.data || [];
     const abonos     = abonosR.data     || [];
+    const clientes   = clientesR.data   || [];
     const nombreVis  = Object.fromEntries(vendedoras.map(v => [v.id, v.nombre || 'Sin nombre']));
+    const nombreCli  = Object.fromEntries(clientes.map(c => [c.id, c.nombre || 'Sin nombre']));
 
     const now       = new Date();
     const mesActual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -3389,6 +3392,53 @@ async function renderResultados() {
         </div>`}
       </div>`;
 
+    // Detalle de ventas por Visionaria (colapsado por default, <details>)
+    const _fechaLarga = f => {
+      const [y, m, d] = (f || '').slice(0, 10).split('-');
+      return y && m && d ? `${d} ${MESES_C[+m - 1]} ${y}` : '—';
+    };
+    const _detalleVis = () => {
+      const ventasPorVis = {};
+      ventas.forEach(v => (ventasPorVis[v.vendedora_id] || (ventasPorVis[v.vendedora_id] = [])).push(v));
+      const grupos = Object.entries(ventasPorVis)
+        .map(([id, lista]) => ({
+          nombre: nombreVis[id] || 'Sin asignar',
+          lista: lista.slice().sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || ''))),
+          total: lista.reduce((s, v) => s + (+v.monto || 0), 0),
+        }))
+        .sort((a, b) => b.total - a.total);
+      if (!grupos.length) return '';
+      return `
+      <div class="fin-card" style="margin-top:16px">
+        <h3 class="fin-card-title">Detalle de ventas por Visionaria</h3>
+        ${grupos.map(g => `
+          <details class="rn-det">
+            <summary class="rn-det-head">
+              <span class="rn-det-nombre">${escHtml(g.nombre)}</span>
+              <span class="text-muted" style="font-size:0.75rem">${g.lista.length} venta${g.lista.length === 1 ? '' : 's'} · ${formatPeso(g.total)}</span>
+              <span class="rn-det-btn">Ver detalle <span class="rn-det-arrow">▼</span></span>
+            </summary>
+            <div class="table-wrap rn-table-wrap">
+              <table class="data-table rn-table">
+                <thead><tr><th>Clienta</th><th>Prenda</th><th>Fecha</th><th>Precio vendido</th></tr></thead>
+                <tbody>
+                  ${g.lista.map(v => `<tr>
+                    <td>${escHtml(v.cliente_id != null ? (nombreCli[v.cliente_id] || 'Sin nombre') : 'Sin clienta')}</td>
+                    <td>${escHtml(v.nombre_prenda || '—')}</td>
+                    <td>${_fechaLarga(v.fecha)}</td>
+                    <td>${formatPeso(+v.monto || 0)}</td>
+                  </tr>`).join('')}
+                </tbody>
+                <tfoot><tr class="rn-det-total">
+                  <td colspan="3">Total ${escHtml(g.nombre)}</td>
+                  <td>${formatPeso(g.total)}</td>
+                </tr></tfoot>
+              </table>
+            </div>
+          </details>`).join('')}
+      </div>`;
+    };
+
     const _tablaCat = filas => `
       <div class="fin-card" style="margin-top:16px">
         <h3 class="fin-card-title">Por categoría</h3>
@@ -3419,6 +3469,7 @@ async function renderResultados() {
       <div class="fin-section-divider">Desglose comparativo</div>
       <p class="text-muted rn-nota">Aquí el costo es el precio_costo de cada prenda vendida, para comparar la rentabilidad entre Visionarias y líneas. Los gastos operativos no se reparten por Visionaria, por eso aquí solo se muestra la ganancia bruta.${sinCosto ? ` ${sinCosto} venta${sinCosto === 1 ? '' : 's'} sin precio_costo se cuenta${sinCosto === 1 ? '' : 'n'} con costo $0.` : ''}</p>
       ${_tablaVis(filasVis)}
+      ${_detalleVis()}
       ${_tablaCat(filasCat)}
 
       <div class="fin-section-divider">Histórico mensual — 6 meses</div>
