@@ -2156,3 +2156,4 @@ input.id-input-ok     { border-color: #16a34a !important; }
 .rn-table-wrap { box-shadow: none; }
 .rn-table td, .rn-table th { white-space: nowrap; }
 .rn-nota { font-size: 0.78rem; margin: -4px 0 8px; }
+.rn-margen-sub { color: var(--purple); font-weight: 600; }

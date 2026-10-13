@@ -3208,84 +3208,92 @@ async function renderFinanciero() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  SECCIÓN: RESULTADOS NETOS (ventas a clientas vs. precio_costo de la prenda)
+//  SECCIÓN: RESULTADOS NETOS (vendido / cobrado vs. compra de pacas y gastos operativos)
 // ══════════════════════════════════════════════════════════════════════════════
 async function renderResultados() {
   const main = document.getElementById('sectionContent');
   main.innerHTML = `<div class="fin-loading"><div class="spinner"></div> Calculando resultados…</div>`;
 
   try {
-    const [ventasR, gastosR, vendedorasR] = await Promise.all([
+    const [ventasR, gastosR, vendedorasR, abonosR] = await Promise.all([
       db.from('ventas').select('monto, fecha, vendedora_id, prendas(precio_costo, categoria, marca, numero)'),
       db.from('gastos').select('monto, categoria, fecha, mes, anio'),
       db.from('vendedoras').select('id, nombre'),
+      db.from('abonos').select('vendedora_id, monto, fecha'),
     ]);
-    [['ventas',ventasR],['gastos',gastosR],['vendedoras',vendedorasR]]
+    [['ventas',ventasR],['gastos',gastosR],['vendedoras',vendedorasR],['abonos',abonosR]]
       .forEach(([n, r]) => { if (r.error) console.error(`[resultados] error en ${n}:`, r.error.message); });
 
     const ventas     = ventasR.data     || [];
     const gastos     = gastosR.data     || [];
     const vendedoras = vendedorasR.data || [];
+    const abonos     = abonosR.data     || [];
     const nombreVis  = Object.fromEntries(vendedoras.map(v => [v.id, v.nombre || 'Sin nombre']));
 
     const now       = new Date();
     const mesActual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const MESES_C   = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
     const _labelMes = ym => { const [y, m] = ym.split('-'); return `${MESES_C[+m - 1]} ${y}`; };
-    const _mesVenta = v => (v.fecha || '').slice(0, 7);
+    const _mesFecha = x => (x.fecha || '').slice(0, 7);
     const _mesGasto = g => (g.fecha || '').slice(0, 7) || (g.anio && g.mes ? `${g.anio}-${String(g.mes).padStart(2, '0')}` : '');
 
-    // Acumulador: ingresos (ventas.monto) y costo (prendas.precio_costo, para los desgloses comparativos)
-    const _nuevo = () => ({ ingresos: 0, costo: 0, n: 0 });
-    const _sumar = (acc, v) => { acc.ingresos += +v.monto || 0; acc.costo += +v.prendas?.precio_costo || 0; acc.n++; };
-    const _bruta  = a => a.ingresos - a.costo;
-    const _margen = a => a.ingresos > 0 ? _bruta(a) / a.ingresos * 100 : 0;
+    // Acumulador: vendido (ventas.monto), cobrado (abonos.monto) y costo.
+    // En totales y mensual el costo son las pacas; en los desgloses, precio_costo por prenda (comparativo).
+    const _nuevo  = () => ({ vendido: 0, cobrado: 0, costo: 0, n: 0 });
+    const _venta  = (acc, v) => { acc.vendido += +v.monto || 0; acc.n++; };
+    const _ventaC = (acc, v) => { _venta(acc, v); acc.costo += +v.prendas?.precio_costo || 0; };
+    const _abono  = (acc, a) => { acc.cobrado += +a.monto || 0; };
+    const _xCobrar     = a => a.vendido - a.cobrado;
+    const _brutaV      = a => a.vendido - a.costo;
+    const _brutaC      = a => a.cobrado - a.costo;
+    const _pct         = (num, den) => den > 0 ? num / den * 100 : 0;
 
-    // Totales: costo de mercancía = gastos en pacas (categoria 'Paca…'); el resto son gastos operativos.
-    // (precio_costo por prenda solo se usa en los desgloses comparativos.)
-    const _esPaca   = g => /^paca/i.test(g.categoria || '');
-    const _sumGasto = arr => arr.reduce((s, g) => s + (+g.monto || 0), 0);
-    const pacas     = gastos.filter(_esPaca);
+    const _esPaca    = g => /^paca/i.test(g.categoria || '');
+    const _sumGasto  = arr => arr.reduce((s, g) => s + (+g.monto || 0), 0);
+    const pacas      = gastos.filter(_esPaca);
     const operativos = gastos.filter(g => !_esPaca(g));
 
+    // ── Totales: mes actual e histórico ────────────────────────────────────────
     const hist = _nuevo(), mes = _nuevo();
-    ventas.forEach(v => { _sumar(hist, v); if (_mesVenta(v) === mesActual) _sumar(mes, v); });
+    ventas.forEach(v => { _venta(hist, v); if (_mesFecha(v) === mesActual) _venta(mes, v); });
+    abonos.forEach(a => { _abono(hist, a); if (_mesFecha(a) === mesActual) _abono(mes, a); });
     hist.costo = _sumGasto(pacas);
     mes.costo  = _sumGasto(pacas.filter(g => _mesGasto(g) === mesActual));
-    const sinCosto = ventas.filter(v => v.prendas?.precio_costo == null).length;
-
-    const gastosHist = _sumGasto(operativos);
+    hist.gastos = _sumGasto(operativos);
     const gastosMesArr = operativos.filter(g => _mesGasto(g) === mesActual);
-    const gastosMes  = _sumGasto(gastosMesArr);
-    const netaMes    = _bruta(mes)  - gastosMes;
-    const netaHist   = _bruta(hist) - gastosHist;
+    mes.gastos = _sumGasto(gastosMesArr);
+    const abonosMes = abonos.filter(a => _mesFecha(a) === mesActual).length;
+    const sinCosto  = ventas.filter(v => v.prendas?.precio_costo == null).length;
 
-    // Por Visionaria
+    // ── Por Visionaria (costo = precio_costo por prenda) ───────────────────────
     const porVis = {};
-    ventas.forEach(v => _sumar(porVis[v.vendedora_id] || (porVis[v.vendedora_id] = _nuevo()), v));
+    const _vis = id => porVis[id] || (porVis[id] = _nuevo());
+    ventas.forEach(v => _ventaC(_vis(v.vendedora_id), v));
+    abonos.forEach(a => _abono(_vis(a.vendedora_id), a));
     const filasVis = Object.entries(porVis)
       .map(([id, a]) => ({ nombre: nombreVis[id] || 'Sin asignar', ...a }))
-      .sort((a, b) => _bruta(b) - _bruta(a));
+      .sort((a, b) => _brutaV(b) - _brutaV(a));
 
-    // Por categoría (prefijo de prendas.numero, igual que Resumen Financiero)
+    // ── Por categoría (prefijo de prendas.numero; costo = precio_costo por prenda) ──
     const PREFIJOS_CAT = { SAL: 'Saldo', RAC: 'Rack calidad', JOY: 'Joyería', INT: 'Interior' };
     const porCat = Object.fromEntries(Object.keys(PREFIJOS_CAT).map(p => [p, _nuevo()]));
     const otras  = _nuevo();
     ventas.forEach(v => {
       const pf = (v.prendas?.numero || '').slice(0, 3).toUpperCase();
-      _sumar(porCat[pf] || otras, v);
+      _ventaC(porCat[pf] || otras, v);
     });
     const filasCat = Object.entries(PREFIJOS_CAT).map(([pf, label]) => ({ nombre: `${label} (${pf})`, ...porCat[pf] }));
     if (otras.n) filasCat.push({ nombre: 'Sin categoría', ...otras });
 
-    // Histórico mensual (6 meses, incluye el actual)
+    // ── Histórico mensual (6 meses, incluye el actual) ─────────────────────────
     const meses6 = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       meses6.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
     }
     const porMes = Object.fromEntries(meses6.map(m => [m, { ..._nuevo(), gastos: 0 }]));
-    ventas.forEach(v => { const a = porMes[_mesVenta(v)]; if (a) { a.ingresos += +v.monto || 0; a.n++; } });
+    ventas.forEach(v => { const a = porMes[_mesFecha(v)]; if (a) _venta(a, v); });
+    abonos.forEach(x => { const a = porMes[_mesFecha(x)]; if (a) _abono(a, x); });
     gastos.forEach(g => {
       const a = porMes[_mesGasto(g)];
       if (!a) return;
@@ -3293,90 +3301,149 @@ async function renderResultados() {
     });
 
     // ── HTML ───────────────────────────────────────────────────────────────────
-    const _netaCls = n => n >= 0 ? 'rn-pos' : 'rn-neg';
-    const _kpis = (titulo, a, gastosP, neta, subGastos, subCosto) => `
+    const _cls  = n => n >= 0 ? 'rn-pos' : 'rn-neg';
+    const _card = n => n >= 0 ? 'rn-card-pos' : 'rn-card-neg';
+    const _kpis = (titulo, a, subVend, subCobr, subCosto, subGastos) => {
+      const netaV = _brutaV(a) - a.gastos, netaC = _brutaC(a) - a.gastos;
+      return `
       <div class="fin-section-divider">${titulo}</div>
       <div class="fin-grid rn-grid-6">
         <div class="kpi-card">
-          <div class="kpi-label">Ingresos reales</div>
-          <div class="kpi-value">${formatPeso(a.ingresos)}</div>
-          <div class="kpi-sub">${a.n} venta${a.n === 1 ? '' : 's'} a clientas</div>
+          <div class="kpi-label">Ingresos vendidos</div>
+          <div class="kpi-value">${formatPeso(a.vendido)}</div>
+          <div class="kpi-sub">${subVend}</div>
+        </div>
+        <div class="kpi-card kpi-accent">
+          <div class="kpi-label">Ingresos cobrados</div>
+          <div class="kpi-value">${formatPeso(a.cobrado)}</div>
+          <div class="kpi-sub">${subCobr}</div>
+        </div>
+        <div class="kpi-card kpi-warning">
+          <div class="kpi-label">Por cobrar</div>
+          <div class="kpi-value">${formatPeso(_xCobrar(a))}</div>
+          <div class="kpi-sub">Vendido − Cobrado</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-label">Costo de mercancía</div>
           <div class="kpi-value">${formatPeso(a.costo)}</div>
           <div class="kpi-sub">${subCosto}</div>
         </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Ganancia bruta</div>
-          <div class="kpi-value ${_netaCls(_bruta(a))}">${formatPeso(_bruta(a))}</div>
-          <div class="kpi-sub">Ingresos − Costo</div>
-        </div>
         <div class="kpi-card kpi-danger">
           <div class="kpi-label">Gastos operativos</div>
-          <div class="kpi-value">${formatPeso(gastosP)}</div>
+          <div class="kpi-value">${formatPeso(a.gastos)}</div>
           <div class="kpi-sub">${subGastos}</div>
-        </div>
-        <div class="kpi-card ${neta >= 0 ? 'rn-card-pos' : 'rn-card-neg'}">
-          <div class="kpi-label">Ganancia neta real</div>
-          <div class="kpi-value ${_netaCls(neta)}">${formatPeso(neta)}</div>
-          <div class="kpi-sub">Ganancia bruta − Gastos</div>
         </div>
         <div class="kpi-card kpi-accent">
           <div class="kpi-label">Margen bruto</div>
-          <div class="kpi-value rn-margen">${_margen(a).toFixed(1)}%</div>
-          <div class="kpi-sub">Ganancia bruta / Ingresos</div>
+          <div class="kpi-value rn-margen">${_pct(_brutaV(a), a.vendido).toFixed(1)}%</div>
+          <div class="kpi-sub">Sobre vendido · <span class="rn-margen-sub">${_pct(_brutaC(a), a.cobrado).toFixed(1)}% sobre cobrado</span></div>
+        </div>
+      </div>
+      <div class="fin-grid">
+        <div class="kpi-card ${_card(_brutaV(a))}">
+          <div class="kpi-label">Ganancia bruta · vendido</div>
+          <div class="kpi-value ${_cls(_brutaV(a))}">${formatPeso(_brutaV(a))}</div>
+          <div class="kpi-sub">Vendido − Pacas</div>
+        </div>
+        <div class="kpi-card ${_card(_brutaC(a))}">
+          <div class="kpi-label">Ganancia bruta · cobrado</div>
+          <div class="kpi-value ${_cls(_brutaC(a))}">${formatPeso(_brutaC(a))}</div>
+          <div class="kpi-sub">Cobrado − Pacas</div>
+        </div>
+        <div class="kpi-card ${_card(netaV)}">
+          <div class="kpi-label">Ganancia neta · vendido</div>
+          <div class="kpi-value ${_cls(netaV)}">${formatPeso(netaV)}</div>
+          <div class="kpi-sub">Bruta vendido − Gastos</div>
+        </div>
+        <div class="kpi-card ${_card(netaC)}">
+          <div class="kpi-label">Ganancia neta · cobrado</div>
+          <div class="kpi-value ${_cls(netaC)}">${formatPeso(netaC)}</div>
+          <div class="kpi-sub">Bruta cobrado − Gastos</div>
         </div>
       </div>`;
+    };
 
-    const _tablaDesglose = (titulo, col, filas) => `
+    const _tablaVis = filas => `
       <div class="fin-card">
-        <h3 class="fin-card-title">${titulo}</h3>
+        <h3 class="fin-card-title">Por Visionaria</h3>
         ${!filas.length ? '<p class="text-muted">Sin ventas registradas.</p>' : `
         <div class="table-wrap rn-table-wrap">
           <table class="data-table rn-table">
-            <thead><tr><th>${col}</th><th>Ingresos</th><th>Costo</th><th>Ganancia bruta</th><th>Margen</th></tr></thead>
+            <thead><tr>
+              <th>Visionaria</th><th>Vendido</th><th>Cobrado</th><th>Por cobrar</th><th>Costo prendas</th>
+              <th>Bruta · vendido</th><th>Bruta · cobrado</th><th>Margen</th>
+            </tr></thead>
             <tbody>
               ${filas.map(f => `<tr>
                 <td>${f.nombre} <span class="text-muted" style="font-size:0.72rem">· ${f.n} vtas.</span></td>
-                <td>${formatPeso(f.ingresos)}</td>
+                <td>${formatPeso(f.vendido)}</td>
+                <td>${formatPeso(f.cobrado)}</td>
+                <td>${formatPeso(_xCobrar(f))}</td>
                 <td>${formatPeso(f.costo)}</td>
-                <td class="${_netaCls(_bruta(f))}">${formatPeso(_bruta(f))}</td>
-                <td><span class="rn-margen">${f.n ? _margen(f).toFixed(1) + '%' : '—'}</span></td>
+                <td class="${_cls(_brutaV(f))}">${formatPeso(_brutaV(f))}</td>
+                <td class="${_cls(_brutaC(f))}">${formatPeso(_brutaC(f))}</td>
+                <td><span class="rn-margen">${f.n ? _pct(_brutaV(f), f.vendido).toFixed(1) + '%' : '—'}</span></td>
               </tr>`).join('')}
             </tbody>
           </table>
         </div>`}
       </div>`;
 
+    const _tablaCat = filas => `
+      <div class="fin-card" style="margin-top:16px">
+        <h3 class="fin-card-title">Por categoría</h3>
+        <div class="table-wrap rn-table-wrap">
+          <table class="data-table rn-table">
+            <thead><tr><th>Categoría</th><th>Vendido</th><th>Costo prendas</th><th>Ganancia bruta</th><th>Margen</th></tr></thead>
+            <tbody>
+              ${filas.map(f => `<tr>
+                <td>${f.nombre} <span class="text-muted" style="font-size:0.72rem">· ${f.n} vtas.</span></td>
+                <td>${formatPeso(f.vendido)}</td>
+                <td>${formatPeso(f.costo)}</td>
+                <td class="${_cls(_brutaV(f))}">${formatPeso(_brutaV(f))}</td>
+                <td><span class="rn-margen">${f.n ? _pct(_brutaV(f), f.vendido).toFixed(1) + '%' : '—'}</span></td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+
     main.innerHTML = `
-      ${_kpis(`Mes actual — ${_labelMes(mesActual)}`, mes, gastosMes, netaMes,
-        `${gastosMesArr.length} gastos sin pacas este mes`, 'Compra de pacas del mes')}
-      ${_kpis('Histórico', hist, gastosHist, netaHist,
-        `${operativos.length} registros sin pacas`, `Compra de pacas · ${pacas.length} registros`)}
+      ${_kpis(`Mes actual — ${_labelMes(mesActual)}`, mes,
+        `${mes.n} venta${mes.n === 1 ? '' : 's'} a clientas`, `${abonosMes} abono${abonosMes === 1 ? '' : 's'} este mes`,
+        'Compra de pacas del mes', `${gastosMesArr.length} gastos sin pacas este mes`)}
+      ${_kpis('Histórico', hist,
+        `${hist.n} venta${hist.n === 1 ? '' : 's'} a clientas`, `${abonos.length} abonos registrados`,
+        `Compra de pacas · ${pacas.length} registros`, `${operativos.length} registros sin pacas`)}
 
       <div class="fin-section-divider">Desglose comparativo</div>
-      <p class="text-muted rn-nota">Aquí el costo es el precio_costo de cada prenda vendida, para comparar la rentabilidad entre Visionarias y líneas.${sinCosto ? ` ${sinCosto} venta${sinCosto === 1 ? '' : 's'} sin precio_costo se cuenta${sinCosto === 1 ? '' : 'n'} con costo $0.` : ''}</p>
-      <div class="fin-row">
-        ${_tablaDesglose('Por Visionaria', 'Visionaria', filasVis)}
-        ${_tablaDesglose('Por categoría', 'Categoría', filasCat)}
-      </div>
+      <p class="text-muted rn-nota">Aquí el costo es el precio_costo de cada prenda vendida, para comparar la rentabilidad entre Visionarias y líneas. Los gastos operativos no se reparten por Visionaria, por eso aquí solo se muestra la ganancia bruta.${sinCosto ? ` ${sinCosto} venta${sinCosto === 1 ? '' : 's'} sin precio_costo se cuenta${sinCosto === 1 ? '' : 'n'} con costo $0.` : ''}</p>
+      ${_tablaVis(filasVis)}
+      ${_tablaCat(filasCat)}
 
       <div class="fin-section-divider">Histórico mensual — 6 meses</div>
       <div class="fin-card">
         <div class="table-wrap rn-table-wrap">
           <table class="data-table rn-table">
-            <thead><tr><th>Mes</th><th>Ingresos</th><th>Costo (pacas)</th><th>Ganancia bruta</th><th>Gastos operativos</th><th>Ganancia neta</th></tr></thead>
+            <thead><tr>
+              <th>Mes</th><th>Vendido</th><th>Cobrado</th><th>Por cobrar</th><th>Costo (pacas)</th><th>Gastos operativos</th>
+              <th>Bruta · vendido</th><th>Bruta · cobrado</th><th>Neta · vendido</th><th>Neta · cobrado</th>
+            </tr></thead>
             <tbody>
               ${meses6.slice().reverse().map(m => {
-                const a = porMes[m], neta = _bruta(a) - a.gastos;
+                const a = porMes[m];
+                const netaV = _brutaV(a) - a.gastos, netaC = _brutaC(a) - a.gastos;
                 return `<tr>
                   <td><strong>${_labelMes(m)}</strong></td>
-                  <td>${formatPeso(a.ingresos)}</td>
+                  <td>${formatPeso(a.vendido)}</td>
+                  <td>${formatPeso(a.cobrado)}</td>
+                  <td>${formatPeso(_xCobrar(a))}</td>
                   <td>${formatPeso(a.costo)}</td>
-                  <td>${formatPeso(_bruta(a))}</td>
                   <td>${formatPeso(a.gastos)}</td>
-                  <td class="${_netaCls(neta)}"><strong>${formatPeso(neta)}</strong></td>
+                  <td>${formatPeso(_brutaV(a))}</td>
+                  <td>${formatPeso(_brutaC(a))}</td>
+                  <td class="${_cls(netaV)}"><strong>${formatPeso(netaV)}</strong></td>
+                  <td class="${_cls(netaC)}"><strong>${formatPeso(netaC)}</strong></td>
                 </tr>`;
               }).join('')}
             </tbody>
