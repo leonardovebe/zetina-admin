@@ -49,6 +49,7 @@ async function construirContexto() {
     sb('visionaria_stats?select=vendedora_id,puntos_historicos,puntos_temporada,matches_historicos,matches_temporada'),
     sb('interacciones_clienta?select=id,vendedora_id,clienta_id,prenda_id,resultado,fecha'),
   ]);
+  console.log('[ventas] muestra cliente_id:', ventas.slice(0,3).map(v => v.cliente_id));
 
   const nombreVis  = Object.fromEntries(vendedoras.map(v => [v.id, v.nombre || 'Sin nombre']));
   const statsPorVis = Object.fromEntries(stats.map(s => [s.vendedora_id, s]));
@@ -148,6 +149,7 @@ async function construirContexto() {
   interacciones.forEach(i => { const r = i.resultado || 'Sin resultado'; intPorResultado[r] = (intPorResultado[r] || 0) + 1; });
 
   // ── Construir texto ──
+  console.log('[clientes] top5:', JSON.stringify(topClientas));
   const L = [];
   L.push(`FECHA ACTUAL: ${MESES[now.getMonth()]} ${now.getFullYear()}`);
   L.push('');
