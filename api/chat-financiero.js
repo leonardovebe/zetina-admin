@@ -116,6 +116,25 @@ async function construirContexto() {
   abonos.forEach(a => { if (a.cliente_id != null) abonoPorCliente[a.cliente_id] = (abonoPorCliente[a.cliente_id] || 0) + (+a.monto || 0); });
   const clientesConSaldo   = clientes.filter(c => ((cargoPorCliente[c.id] || 0) - (abonoPorCliente[c.id] || 0)) > 0).length;
   const saldoTotalClientes = clientes.reduce((s, c) => s + Math.max(0, (cargoPorCliente[c.id] || 0) - (abonoPorCliente[c.id] || 0)), 0);
+  // Historial por clienta (equivale a clientes LEFT JOIN ventas GROUP BY c.id)
+  const histPorCliente = {};
+  ventas.forEach(v => {
+    if (v.cliente_id == null) return;
+    const h = histPorCliente[v.cliente_id] || (histPorCliente[v.cliente_id] = { compras: 0, gastado: 0, ultima: null });
+    h.compras += 1;
+    h.gastado += +v.monto || 0;
+    if (v.fecha && (!h.ultima || v.fecha > h.ultima)) h.ultima = v.fecha;
+  });
+  const clientasHist = clientes.map(c => {
+    const h = histPorCliente[c.id] || { compras: 0, gastado: 0, ultima: null };
+    return {
+      nombre: c.nombre || 'Sin nombre', vendedora: nombreVis[c.vendedora_id] || 'Sin asignar',
+      compras: h.compras, gastado: h.gastado, ultima: h.ultima,
+      saldo: (cargoPorCliente[c.id] || 0) - (abonoPorCliente[c.id] || 0),
+    };
+  }).sort((x, y) => y.compras - x.compras || y.gastado - x.gastado);
+  const topClientas    = clientasHist.filter(c => c.compras > 0).slice(0, 5);
+  const clientasDeudor = clientasHist.filter(c => c.saldo > 0).sort((x, y) => y.saldo - x.saldo);
 
   // ── PRÉSTAMOS ──
   const prestamosActivos = prestamos.filter(p => !/(devuelt|finaliz|cerrad)/i.test(p.estado || '') && !p.fecha_devolucion);
@@ -184,6 +203,15 @@ async function construirContexto() {
   L.push(`- Total de clientes: ${clientes.length}`);
   L.push(`- Con saldo pendiente: ${clientesConSaldo}`);
   L.push(`- Saldo pendiente total (ventas − abonos): ${MXN(saldoTotalClientes)}`);
+  if (topClientas.length) {
+    L.push('- Top 5 clientas más frecuentes:');
+    topClientas.forEach(c => L.push(`  · ${c.nombre} (Visionaria: ${c.vendedora}): ${c.compras} compras, ${MXN(c.gastado)} gastado, última ${(c.ultima || '').toString().slice(0, 10) || 's/f'}`));
+  }
+  if (clientasDeudor.length) {
+    L.push('- Clientas con saldo pendiente:');
+    clientasDeudor.slice(0, 20).forEach(c => L.push(`  · ${c.nombre} (Visionaria: ${c.vendedora}): debe ${MXN(c.saldo)}`));
+    if (clientasDeudor.length > 20) L.push(`  · …y ${clientasDeudor.length - 20} más`);
+  }
   L.push('');
   L.push('=== GASTOS ===');
   L.push(`- Gastos del mes: ${MXN(gastosMes)}`);
