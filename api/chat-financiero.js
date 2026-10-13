@@ -1,3 +1,4 @@
+// Contexto enriquecido con historial de compras de clientas (redeploy 2026-10-13).
 // Asistente IA financiero de ZETINA.
 // Recibe { messages: [...], contexto: {} }, consulta KPIs frescos de Supabase
 // y responde con Claude usando esos datos en el system prompt.
