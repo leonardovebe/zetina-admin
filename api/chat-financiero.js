@@ -110,6 +110,25 @@ async function construirContexto() {
   detCon.forEach(d => { if (!esPagado(d.pedido)) return; const h = histMensual[mesDe(d.pedido.created_at)]; if (h) h.ingresos += +d.precio || 0; });
   gastos.forEach(g => { const h = histMensual[mesDe(g.fecha)]; if (h) h.gastos += +g.monto || 0; });
 
+  // ── COMPRAS POR CLIENTA POR MES (últimos 6 meses, top 20 por número de compras) ──
+  const clientePorId = Object.fromEntries(clientes.map(c => [c.id, c]));
+  const comprasCliMes = {};
+  ventas.forEach(v => {
+    const m = mesDe(v.fecha);
+    if (v.cliente_id == null || !histMensual[m]) return;
+    const cc = comprasCliMes[v.cliente_id] || (comprasCliMes[v.cliente_id] = { compras: 0, monto: 0, meses: {} });
+    const mm = cc.meses[m] || (cc.meses[m] = { n: 0, monto: 0 });
+    cc.compras += 1; cc.monto += +v.monto || 0;
+    mm.n += 1;       mm.monto += +v.monto || 0;
+  });
+  const topCliMes = Object.entries(comprasCliMes)
+    .sort((x, y) => y[1].compras - x[1].compras || y[1].monto - x[1].monto)
+    .slice(0, 20)
+    .map(([id, cc]) => {
+      const c = clientePorId[id] || {};
+      return { nombre: c.nombre || 'Sin nombre', vendedora: nombreVis[c.vendedora_id] || 'Sin asignar', ...cc };
+    });
+
   // ── VISIONARIAS (ventas del mes, puntos, devoluciones, crédito) ──
   const ventasMesPorVis = {};
   ventas.filter(v => mesDe(v.fecha) === mesActual).forEach(v => { ventasMesPorVis[v.vendedora_id] = (ventasMesPorVis[v.vendedora_id] || 0) + (+v.monto || 0); });
@@ -255,6 +274,15 @@ async function construirContexto() {
     const h = histMensual[m];
     L.push(`| ${MESES[+m.slice(5, 7) - 1]} ${m.slice(0, 4)} | ${h.ventasN} | ${MXN(h.ventasMonto)} | ${MXN(h.ingresos)} | ${MXN(h.gastos)} | ${h.devoluciones} |`);
   });
+
+  if (topCliMes.length) {
+    L.push('');
+    L.push('=== COMPRAS POR CLIENTA POR MES (6 meses, top 20) ===');
+    topCliMes.forEach(c => {
+      L.push(`- ${c.nombre} (Visionaria: ${c.vendedora}): ${c.compras} compras, ${MXN(c.monto)} en total`);
+      ultimos6.filter(m => c.meses[m]).forEach(m => L.push(`  · ${MESES[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}: ${c.meses[m].n} compras, ${MXN(c.meses[m].monto)}`));
+    });
+  }
 
   return L.join('\n');
 }
