@@ -49,7 +49,6 @@ async function construirContexto() {
     sb('visionaria_stats?select=vendedora_id,puntos_historicos,puntos_temporada,matches_historicos,matches_temporada'),
     sb('interacciones_clienta?select=id,vendedora_id,clienta_id,prenda_id,resultado,fecha'),
   ]);
-  console.log('[ventas] muestra cliente_id:', ventas.slice(0,3).map(v => v.cliente_id));
 
   const nombreVis  = Object.fromEntries(vendedoras.map(v => [v.id, v.nombre || 'Sin nombre']));
   const statsPorVis = Object.fromEntries(stats.map(s => [s.vendedora_id, s]));
@@ -160,7 +159,6 @@ async function construirContexto() {
   interacciones.forEach(i => { const r = i.resultado || 'Sin resultado'; intPorResultado[r] = (intPorResultado[r] || 0) + 1; });
 
   // ── Construir texto ──
-  console.log('[clientes] top5:', JSON.stringify(topClientas));
   const L = [];
   L.push(`FECHA ACTUAL: ${MESES[now.getMonth()]} ${now.getFullYear()}`);
   L.push('');
@@ -257,12 +255,6 @@ async function construirContexto() {
     const h = histMensual[m];
     L.push(`| ${MESES[+m.slice(5, 7) - 1]} ${m.slice(0, 4)} | ${h.ventasN} | ${MXN(h.ventasMonto)} | ${MXN(h.ingresos)} | ${MXN(h.gastos)} | ${h.devoluciones} |`);
   });
-  L.push('');
-  L.push('=== DEBUG ===');
-  L.push(`- ventas cargadas: ${ventas.length}`);
-  L.push(`- clientes cargados: ${clientes.length}`);
-  L.push(`- ventas con cliente_id: ${ventas.filter(v => v.cliente_id != null).length}`);
-  L.push(`- top5 clientas: ${topClientas.map(c => c.nombre).join(', ') || 'ninguna'}`);
 
   return L.join('\n');
 }
