@@ -100,6 +100,17 @@ async function construirContexto() {
     devCountPorVisId[d.vendedora_id] = (devCountPorVisId[d.vendedora_id] || 0) + 1;
   });
 
+  // ── HISTORIAL MENSUAL (últimos 6 meses, incluye el actual) ──
+  const ultimos6 = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    ultimos6.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  const histMensual = Object.fromEntries(ultimos6.map(m => [m, { ventasN: 0, ventasMonto: 0, ingresos: 0, gastos: 0, devoluciones: devPorMes[m] || 0 }]));
+  ventas.forEach(v => { const h = histMensual[mesDe(v.fecha)]; if (h) { h.ventasN += 1; h.ventasMonto += +v.monto || 0; } });
+  detCon.forEach(d => { if (!esPagado(d.pedido)) return; const h = histMensual[mesDe(d.pedido.created_at)]; if (h) h.ingresos += +d.precio || 0; });
+  gastos.forEach(g => { const h = histMensual[mesDe(g.fecha)]; if (h) h.gastos += +g.monto || 0; });
+
   // ── VISIONARIAS (ventas del mes, puntos, devoluciones, crédito) ──
   const ventasMesPorVis = {};
   ventas.filter(v => mesDe(v.fecha) === mesActual).forEach(v => { ventasMesPorVis[v.vendedora_id] = (ventasMesPorVis[v.vendedora_id] || 0) + (+v.monto || 0); });
@@ -238,6 +249,14 @@ async function construirContexto() {
     Object.entries(intPorResultado).sort((a, b) => b[1] - a[1]).forEach(([r, n]) => L.push(`  · ${r}: ${n}`));
   }
 
+  L.push('');
+  L.push('=== HISTORIAL MENSUAL (6 meses) ===');
+  L.push('| Mes | Ventas a clientas (#) | Ventas a clientas ($) | Ingresos ZETINA | Gastos | Devoluciones |');
+  L.push('|---|---|---|---|---|---|');
+  ultimos6.forEach(m => {
+    const h = histMensual[m];
+    L.push(`| ${MESES[+m.slice(5, 7) - 1]} ${m.slice(0, 4)} | ${h.ventasN} | ${MXN(h.ventasMonto)} | ${MXN(h.ingresos)} | ${MXN(h.gastos)} | ${h.devoluciones} |`);
+  });
   L.push('');
   L.push('=== DEBUG ===');
   L.push(`- ventas cargadas: ${ventas.length}`);
