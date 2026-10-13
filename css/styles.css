@@ -2133,3 +2133,26 @@ input.id-input-ok     { border-color: #16a34a !important; }
   .chat-wrap { height: calc(100vh - var(--topbar-h) - 32px); }
   .chat-bubble { max-width: 88%; }
 }
+
+/* ── Resultados Netos ───────────────────────────────────────────────────────── */
+.rn-grid-6 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 900px) { .rn-grid-6 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 500px) { .rn-grid-6 { grid-template-columns: 1fr; } }
+.kpi-value.rn-pos, .rn-table .rn-pos { color: var(--success); }
+.kpi-value.rn-neg, .rn-table .rn-neg { color: var(--danger); }
+.kpi-card.rn-card-pos { border-color: rgba(22,163,74,0.35); }
+.kpi-card.rn-card-neg { border-color: rgba(220,38,38,0.35); }
+.kpi-value.rn-margen { color: var(--purple); }
+.rn-table .rn-margen {
+  display: inline-block;
+  background: rgba(133,90,162,0.1);
+  color: var(--purple);
+  border-radius: 100px;
+  padding: 2px 10px;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+.rn-table-wrap { box-shadow: none; }
+.rn-table td, .rn-table th { white-space: nowrap; }
+.rn-nota { font-size: 0.78rem; margin: -4px 0 8px; }

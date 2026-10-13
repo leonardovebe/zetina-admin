@@ -78,6 +78,7 @@ function closeModal() {
 // ── Navegación ────────────────────────────────────────────────────────────────
 const SECTION_TITLES = {
   financiero:   'Resumen Financiero',
+  resultados:   'Resultados Netos',
   asistente:    'Asistente IA',
   prendas:      'Subir Prendas',
   inventario:   'Inventario',
@@ -106,7 +107,7 @@ function navigate(section) {
 
   if (section === 'pedidos') updatePedidosBadge(0);
 
-  const renders = { financiero: renderFinanciero, asistente: renderAsistente, prendas: renderPrendas,
+  const renders = { financiero: renderFinanciero, resultados: renderResultados, asistente: renderAsistente, prendas: renderPrendas,
     inventario: renderInventario, pedidos: renderPedidos,
     vendedoras: renderVendedoras, clientes: renderClientes,
     devoluciones: renderDevoluciones, gastos: renderGastos, categorias: renderCategorias };
@@ -3207,6 +3208,188 @@ async function renderFinanciero() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+//  SECCIÓN: RESULTADOS NETOS (ventas a clientas vs. precio_costo de la prenda)
+// ══════════════════════════════════════════════════════════════════════════════
+async function renderResultados() {
+  const main = document.getElementById('sectionContent');
+  main.innerHTML = `<div class="fin-loading"><div class="spinner"></div> Calculando resultados…</div>`;
+
+  try {
+    const [ventasR, gastosR, vendedorasR] = await Promise.all([
+      db.from('ventas').select('monto, fecha, vendedora_id, prendas(precio_costo, categoria, marca, numero)'),
+      db.from('gastos').select('monto, categoria, fecha, mes, anio'),
+      db.from('vendedoras').select('id, nombre'),
+    ]);
+    [['ventas',ventasR],['gastos',gastosR],['vendedoras',vendedorasR]]
+      .forEach(([n, r]) => { if (r.error) console.error(`[resultados] error en ${n}:`, r.error.message); });
+
+    const ventas     = ventasR.data     || [];
+    const gastos     = gastosR.data     || [];
+    const vendedoras = vendedorasR.data || [];
+    const nombreVis  = Object.fromEntries(vendedoras.map(v => [v.id, v.nombre || 'Sin nombre']));
+
+    const now       = new Date();
+    const mesActual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const MESES_C   = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const _labelMes = ym => { const [y, m] = ym.split('-'); return `${MESES_C[+m - 1]} ${y}`; };
+    const _mesVenta = v => (v.fecha || '').slice(0, 7);
+    const _mesGasto = g => (g.fecha || '').slice(0, 7) || (g.anio && g.mes ? `${g.anio}-${String(g.mes).padStart(2, '0')}` : '');
+
+    // Acumulador: ingresos (ventas.monto) y costo (prendas.precio_costo, para los desgloses comparativos)
+    const _nuevo = () => ({ ingresos: 0, costo: 0, n: 0 });
+    const _sumar = (acc, v) => { acc.ingresos += +v.monto || 0; acc.costo += +v.prendas?.precio_costo || 0; acc.n++; };
+    const _bruta  = a => a.ingresos - a.costo;
+    const _margen = a => a.ingresos > 0 ? _bruta(a) / a.ingresos * 100 : 0;
+
+    // Totales: costo de mercancía = gastos en pacas (categoria 'Paca…'); el resto son gastos operativos.
+    // (precio_costo por prenda solo se usa en los desgloses comparativos.)
+    const _esPaca   = g => /^paca/i.test(g.categoria || '');
+    const _sumGasto = arr => arr.reduce((s, g) => s + (+g.monto || 0), 0);
+    const pacas     = gastos.filter(_esPaca);
+    const operativos = gastos.filter(g => !_esPaca(g));
+
+    const hist = _nuevo(), mes = _nuevo();
+    ventas.forEach(v => { _sumar(hist, v); if (_mesVenta(v) === mesActual) _sumar(mes, v); });
+    hist.costo = _sumGasto(pacas);
+    mes.costo  = _sumGasto(pacas.filter(g => _mesGasto(g) === mesActual));
+    const sinCosto = ventas.filter(v => v.prendas?.precio_costo == null).length;
+
+    const gastosHist = _sumGasto(operativos);
+    const gastosMesArr = operativos.filter(g => _mesGasto(g) === mesActual);
+    const gastosMes  = _sumGasto(gastosMesArr);
+    const netaMes    = _bruta(mes)  - gastosMes;
+    const netaHist   = _bruta(hist) - gastosHist;
+
+    // Por Visionaria
+    const porVis = {};
+    ventas.forEach(v => _sumar(porVis[v.vendedora_id] || (porVis[v.vendedora_id] = _nuevo()), v));
+    const filasVis = Object.entries(porVis)
+      .map(([id, a]) => ({ nombre: nombreVis[id] || 'Sin asignar', ...a }))
+      .sort((a, b) => _bruta(b) - _bruta(a));
+
+    // Por categoría (prefijo de prendas.numero, igual que Resumen Financiero)
+    const PREFIJOS_CAT = { SAL: 'Saldo', RAC: 'Rack calidad', JOY: 'Joyería', INT: 'Interior' };
+    const porCat = Object.fromEntries(Object.keys(PREFIJOS_CAT).map(p => [p, _nuevo()]));
+    const otras  = _nuevo();
+    ventas.forEach(v => {
+      const pf = (v.prendas?.numero || '').slice(0, 3).toUpperCase();
+      _sumar(porCat[pf] || otras, v);
+    });
+    const filasCat = Object.entries(PREFIJOS_CAT).map(([pf, label]) => ({ nombre: `${label} (${pf})`, ...porCat[pf] }));
+    if (otras.n) filasCat.push({ nombre: 'Sin categoría', ...otras });
+
+    // Histórico mensual (6 meses, incluye el actual)
+    const meses6 = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      meses6.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    const porMes = Object.fromEntries(meses6.map(m => [m, { ..._nuevo(), gastos: 0 }]));
+    ventas.forEach(v => { const a = porMes[_mesVenta(v)]; if (a) { a.ingresos += +v.monto || 0; a.n++; } });
+    gastos.forEach(g => {
+      const a = porMes[_mesGasto(g)];
+      if (!a) return;
+      if (_esPaca(g)) a.costo += +g.monto || 0; else a.gastos += +g.monto || 0;
+    });
+
+    // ── HTML ───────────────────────────────────────────────────────────────────
+    const _netaCls = n => n >= 0 ? 'rn-pos' : 'rn-neg';
+    const _kpis = (titulo, a, gastosP, neta, subGastos, subCosto) => `
+      <div class="fin-section-divider">${titulo}</div>
+      <div class="fin-grid rn-grid-6">
+        <div class="kpi-card">
+          <div class="kpi-label">Ingresos reales</div>
+          <div class="kpi-value">${formatPeso(a.ingresos)}</div>
+          <div class="kpi-sub">${a.n} venta${a.n === 1 ? '' : 's'} a clientas</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Costo de mercancía</div>
+          <div class="kpi-value">${formatPeso(a.costo)}</div>
+          <div class="kpi-sub">${subCosto}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Ganancia bruta</div>
+          <div class="kpi-value ${_netaCls(_bruta(a))}">${formatPeso(_bruta(a))}</div>
+          <div class="kpi-sub">Ingresos − Costo</div>
+        </div>
+        <div class="kpi-card kpi-danger">
+          <div class="kpi-label">Gastos operativos</div>
+          <div class="kpi-value">${formatPeso(gastosP)}</div>
+          <div class="kpi-sub">${subGastos}</div>
+        </div>
+        <div class="kpi-card ${neta >= 0 ? 'rn-card-pos' : 'rn-card-neg'}">
+          <div class="kpi-label">Ganancia neta real</div>
+          <div class="kpi-value ${_netaCls(neta)}">${formatPeso(neta)}</div>
+          <div class="kpi-sub">Ganancia bruta − Gastos</div>
+        </div>
+        <div class="kpi-card kpi-accent">
+          <div class="kpi-label">Margen bruto</div>
+          <div class="kpi-value rn-margen">${_margen(a).toFixed(1)}%</div>
+          <div class="kpi-sub">Ganancia bruta / Ingresos</div>
+        </div>
+      </div>`;
+
+    const _tablaDesglose = (titulo, col, filas) => `
+      <div class="fin-card">
+        <h3 class="fin-card-title">${titulo}</h3>
+        ${!filas.length ? '<p class="text-muted">Sin ventas registradas.</p>' : `
+        <div class="table-wrap rn-table-wrap">
+          <table class="data-table rn-table">
+            <thead><tr><th>${col}</th><th>Ingresos</th><th>Costo</th><th>Ganancia bruta</th><th>Margen</th></tr></thead>
+            <tbody>
+              ${filas.map(f => `<tr>
+                <td>${f.nombre} <span class="text-muted" style="font-size:0.72rem">· ${f.n} vtas.</span></td>
+                <td>${formatPeso(f.ingresos)}</td>
+                <td>${formatPeso(f.costo)}</td>
+                <td class="${_netaCls(_bruta(f))}">${formatPeso(_bruta(f))}</td>
+                <td><span class="rn-margen">${f.n ? _margen(f).toFixed(1) + '%' : '—'}</span></td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`}
+      </div>`;
+
+    main.innerHTML = `
+      ${_kpis(`Mes actual — ${_labelMes(mesActual)}`, mes, gastosMes, netaMes,
+        `${gastosMesArr.length} gastos sin pacas este mes`, 'Compra de pacas del mes')}
+      ${_kpis('Histórico', hist, gastosHist, netaHist,
+        `${operativos.length} registros sin pacas`, `Compra de pacas · ${pacas.length} registros`)}
+
+      <div class="fin-section-divider">Desglose comparativo</div>
+      <p class="text-muted rn-nota">Aquí el costo es el precio_costo de cada prenda vendida, para comparar la rentabilidad entre Visionarias y líneas.${sinCosto ? ` ${sinCosto} venta${sinCosto === 1 ? '' : 's'} sin precio_costo se cuenta${sinCosto === 1 ? '' : 'n'} con costo $0.` : ''}</p>
+      <div class="fin-row">
+        ${_tablaDesglose('Por Visionaria', 'Visionaria', filasVis)}
+        ${_tablaDesglose('Por categoría', 'Categoría', filasCat)}
+      </div>
+
+      <div class="fin-section-divider">Histórico mensual — 6 meses</div>
+      <div class="fin-card">
+        <div class="table-wrap rn-table-wrap">
+          <table class="data-table rn-table">
+            <thead><tr><th>Mes</th><th>Ingresos</th><th>Costo (pacas)</th><th>Ganancia bruta</th><th>Gastos operativos</th><th>Ganancia neta</th></tr></thead>
+            <tbody>
+              ${meses6.slice().reverse().map(m => {
+                const a = porMes[m], neta = _bruta(a) - a.gastos;
+                return `<tr>
+                  <td><strong>${_labelMes(m)}</strong></td>
+                  <td>${formatPeso(a.ingresos)}</td>
+                  <td>${formatPeso(a.costo)}</td>
+                  <td>${formatPeso(_bruta(a))}</td>
+                  <td>${formatPeso(a.gastos)}</td>
+                  <td class="${_netaCls(neta)}"><strong>${formatPeso(neta)}</strong></td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+
+  } catch (err) {
+    main.innerHTML = `<div class="error-state">Error al cargar datos: ${err.message}</div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 //  SECCIÓN: DEVOLUCIONES
 // ══════════════════════════════════════════════════════════════════════════════
 let _devFiltro = 'Pendiente';
@@ -3902,16 +4085,16 @@ function parseDesc(json) {
 //  AUTO-REFRESH: Supabase Realtime
 // ══════════════════════════════════════════════════════════════════════════════
 const _TABLE_SECTION_MAP = {
-  prendas:               ['inventario', 'financiero'],
+  prendas:               ['inventario', 'financiero', 'resultados'],
   fotos_prendas:         ['inventario'],
   detalle_pedidos:       ['inventario', 'pedidos', 'financiero'],
   pedidos:               ['pedidos', 'financiero'],
-  vendedoras:            ['vendedoras', 'financiero'],
+  vendedoras:            ['vendedoras', 'financiero', 'resultados'],
   inventario_vendedoras: ['vendedoras'],
   clientes:              ['clientes', 'vendedoras', 'financiero'],
   devoluciones:          ['devoluciones'],
-  gastos:                ['gastos', 'financiero'],
-  ventas:                ['financiero', 'vendedoras'],
+  gastos:                ['gastos', 'financiero', 'resultados'],
+  ventas:                ['financiero', 'vendedoras', 'resultados'],
   abonos:                ['financiero'],
   visionaria_stats:      ['vendedoras'],
 };
@@ -3924,6 +4107,7 @@ const _SECTION_RELOAD = {
   devoluciones: () => loadDevoluciones(),
   gastos:       () => Promise.all([_loadGastosLista(), _loadGastosStats()]),
   financiero:   () => renderFinanciero(),
+  resultados:   () => renderResultados(),
 };
 
 let _realtimeDebounce;
