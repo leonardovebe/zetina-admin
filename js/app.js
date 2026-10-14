@@ -3511,6 +3511,12 @@ async function renderResultados() {
 //  SECCIÓN: DEVOLUCIONES
 // ══════════════════════════════════════════════════════════════════════════════
 let _devFiltro = 'Pendiente';
+const _DEV_MOTIVO_LABEL = {
+  no_encontre_clienta: 'No encontré clienta',
+  defecto:             'Defecto',
+  otro:                'Otro',
+  cambio_talla:        'Cambio de talla',
+};
 const _devCache = new Map();
 
 async function renderDevoluciones() {
@@ -3588,7 +3594,7 @@ async function loadDevoluciones() {
                 <td class="td-name">${d.vendedoras?.nombre || '—'}</td>
                 <td><span class="id-badge">${d.prendas?.numero || formatZtId(d.prenda_id)}</span></td>
                 <td>${d.prendas?.nombre || '—'}</td>
-                <td>${d.motivo || '—'}</td>
+                <td>${_DEV_MOTIVO_LABEL[d.motivo] || d.motivo || '—'}</td>
                 <td>${formatDate(d.created_at)}</td>
                 <td><span class="badge badge-${badgeClass}">${d.estado || '—'}</span></td>
                 <td class="td-actions">
