@@ -353,7 +353,7 @@ async function renderPrendas() {
         <div class="form-section">
           <div class="form-section-title">
             Fotos de etiquetas
-            <span class="foto-section-badge foto-section-badge--ia">Solo para análisis de IA</span>
+            <span class="foto-section-badge foto-section-badge--ia">Solo para el agente</span>
           </div>
           <div class="photo-upload-area photo-upload-area--etiqueta" id="photoAreaEtiqueta">
             <input type="file" id="fotosInputEtiqueta" accept="image/*" multiple hidden>
@@ -362,7 +362,7 @@ async function renderPrendas() {
                 <rect x="3" y="6" width="18" height="13" rx="2"/>
                 <path d="M3 10h18M8 6V4M16 6V4"/>
               </svg>
-              <p>Sube al menos una foto de etiqueta para activar la IA</p>
+              <p>Sube al menos una foto de etiqueta para activar al agente redactor</p>
               <p class="text-muted">Lee talla, composición y cuidado — no se guardan</p>
             </div>
             <div class="photo-previews" id="photoPreviewsEtiqueta"></div>
@@ -374,7 +374,7 @@ async function renderPrendas() {
           <div class="form-section-title">Observaciones</div>
           <div class="form-group">
             <textarea id="fObservaciones" rows="3" style="resize:vertical"
-              placeholder="Agrega notas sobre la prenda que ayuden a la IA a generar una mejor descripción. Ej: la tela es muy suave, el corte es generoso, ideal para ocasiones formales…"></textarea>
+              placeholder="Agrega notas sobre la prenda que ayuden al agente a redactar una mejor descripción. Ej: la tela es muy suave, el corte es generoso, ideal para ocasiones formales…"></textarea>
           </div>
         </div>
 
@@ -401,7 +401,7 @@ async function renderPrendas() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;flex-shrink:0">
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
             </svg>
-            Información de la prenda — la IA rellena estos campos, puedes editar
+            Información de la prenda — el agente redactor rellena estos campos, puedes editar
           </div>
 
           <!-- 14. Nombre / Marca / Color / Talla marcada -->
@@ -1378,7 +1378,7 @@ async function abrirEditarPrenda(id) {
       <div class="edit-section">
         <div class="form-section-title">
           Fotos de etiqueta
-          <span class="foto-section-badge foto-section-badge--ia">Solo para IA</span>
+          <span class="foto-section-badge foto-section-badge--ia">Solo para el agente</span>
         </div>
         <div class="photo-upload-area photo-upload-area--etiqueta" id="editEtiquetaArea" style="min-height:100px">
           <input type="file" id="editEtiquetasInput" accept="image/*" multiple hidden>
@@ -1387,14 +1387,14 @@ async function abrirEditarPrenda(id) {
               <rect x="3" y="6" width="18" height="13" rx="2"/>
               <path d="M3 10h18M8 6V4M16 6V4"/>
             </svg>
-            <p style="font-size:0.8rem;color:var(--text-muted)">Sube fotos de etiqueta para activar la IA</p>
+            <p style="font-size:0.8rem;color:var(--text-muted)">Sube fotos de etiqueta para activar al agente redactor</p>
           </div>
           <div class="photo-previews" id="editEtiquetaPreviews"></div>
         </div>
         <div class="form-group" style="margin-top:10px">
-          <label style="font-size:0.8rem;color:var(--text-muted)">Observaciones para la IA</label>
+          <label style="font-size:0.8rem;color:var(--text-muted)">Observaciones para el agente</label>
           <textarea id="eObservaciones" data-loaded="${p.observaciones !== undefined ? '1' : '0'}" rows="2" style="resize:vertical;font-size:0.85rem"
-            placeholder="Agrega notas sobre la prenda que ayuden a la IA a generar una mejor descripción. Ej: la tela es muy suave, el corte es generoso, ideal para ocasiones formales...">${escHtml(p.observaciones)}</textarea>
+            placeholder="Agrega notas sobre la prenda que ayuden al agente a redactar una mejor descripción. Ej: la tela es muy suave, el corte es generoso, ideal para ocasiones formales...">${escHtml(p.observaciones)}</textarea>
         </div>
         <div class="form-group" style="margin-top:10px">
           <label style="font-size:0.8rem;color:var(--text-muted)">Criterios</label>
@@ -1420,7 +1420,7 @@ async function abrirEditarPrenda(id) {
           </div>` : ''}
           <div class="form-group">
             <label>Nombre *</label>
-            <input type="text" id="eNombre" value="${p.nombre || ''}" placeholder="Se puede dejar vacío y generar con IA">
+            <input type="text" id="eNombre" value="${p.nombre || ''}" placeholder="Se puede dejar vacío y redactar con el agente">
           </div>
           <div class="form-group">
             <label>Marca</label>
