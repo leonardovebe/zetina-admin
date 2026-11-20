@@ -79,7 +79,7 @@ function closeModal() {
 const SECTION_TITLES = {
   financiero:   'Resumen Financiero',
   resultados:   'Resultados Netos',
-  asistente:    'Asistente IA',
+  asistente:    'Asistente financiero',
   prendas:      'Subir Prendas',
   inventario:   'Inventario',
   pedidos:      'Pedidos',
@@ -390,7 +390,7 @@ async function renderPrendas() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
             </svg>
-            Generar con IA
+            Redactar con el agente
           </button>
           <span class="ia-hint">Rellena nombre, marca, talla y descripción automáticamente</span>
         </div>
@@ -788,7 +788,7 @@ async function handleGenerarIA() {
   btn.classList.add('loading');
   btn.disabled = true;
   const originalHTML = btn.innerHTML;
-  btn.innerHTML = `<span class="spinner-sm"></span> Analizando…`;
+  btn.innerHTML = `<span class="spinner-sm"></span> El agente está redactando…`;
 
   const sessionId = Date.now().toString(36);
   const tempPaths = [];
@@ -851,9 +851,9 @@ async function handleGenerarIA() {
     if (r.como_presentarla) document.getElementById('fComoPresentarla').value = r.como_presentarla;
     if (r.descripcion_publica) document.getElementById('fDescripcionPublica').value = r.descripcion_publica;
 
-    showToast('¡Campos llenados con IA! Revisa y edita antes de guardar.', 'success');
+    showToast('¡El agente redactor llenó los campos! Revisa y edita antes de guardar.', 'success');
   } catch (err) {
-    showToast(err.message || 'Error al conectar con la IA', 'error');
+    showToast(err.message || 'Error al conectar con el agente redactor', 'error');
   } finally {
     if (tempPaths.length) {
       db.storage.from('prenda-fotos').remove(tempPaths).catch(() => {});
@@ -1327,8 +1327,8 @@ async function abrirEditarPrenda(id) {
 
   // Try fetching with optional columns (numero, categoria); fall back if they don't exist yet
   let p, hasExtras = true;
-  const fullSel = 'id, nombre, marca, color, categoria, departamento, numero, emoji, gradiente, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, medida_3_nombre, medida_3_valor, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, descripcion_publica, criterios, fotos_prendas(id, url, orden)';
-  const safeSel = 'id, nombre, marca, color, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url, orden)';
+  const fullSel = 'id, nombre, marca, color, categoria, departamento, numero, emoji, gradiente, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, medida_3_nombre, medida_3_valor, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, descripcion_publica, criterios, observaciones, fotos_prendas(id, url, orden)';
+  const safeSel = 'id, nombre, marca, color, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, observaciones, fotos_prendas(id, url, orden)';
 
   let { data, error } = await db.from('prendas').select(fullSel).eq('id', id).single();
   if (error && error.message.includes('does not exist')) {
@@ -1393,7 +1393,7 @@ async function abrirEditarPrenda(id) {
         </div>
         <div class="form-group" style="margin-top:10px">
           <label style="font-size:0.8rem;color:var(--text-muted)">Observaciones para la IA</label>
-          <textarea id="eObservaciones" rows="2" style="resize:vertical;font-size:0.85rem"
+          <textarea id="eObservaciones" data-loaded="${p.observaciones !== undefined ? '1' : '0'}" rows="2" style="resize:vertical;font-size:0.85rem"
             placeholder="Agrega notas sobre la prenda que ayuden a la IA a generar una mejor descripción. Ej: la tela es muy suave, el corte es generoso, ideal para ocasiones formales...">${escHtml(p.observaciones)}</textarea>
         </div>
         <div class="form-group" style="margin-top:10px">
@@ -1405,7 +1405,7 @@ async function abrirEditarPrenda(id) {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;flex-shrink:0">
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
             </svg>
-            Generar con IA
+            Redactar con el agente
           </button>
           <span class="ia-hint">Rellena nombre, marca, talla y descripción</span>
         </div>
@@ -1673,7 +1673,7 @@ async function handleEditGenerarIA() {
   btn.classList.add('loading');
   btn.disabled = true;
   const originalHTML = btn.innerHTML;
-  btn.innerHTML = `<span class="spinner-sm"></span> Analizando…`;
+  btn.innerHTML = `<span class="spinner-sm"></span> El agente está redactando…`;
 
   const sessionId = Date.now().toString(36);
   const tempPaths = [];
@@ -1733,9 +1733,9 @@ async function handleEditGenerarIA() {
 
     _editFotosEtiqueta = [];
     _renderEditEtiquetas();
-    showToast('¡Campos llenados con IA! Revisa antes de guardar.', 'success');
+    showToast('¡El agente redactor llenó los campos! Revisa antes de guardar.', 'success');
   } catch (err) {
-    showToast(err.message || 'Error al conectar con la IA', 'error');
+    showToast(err.message || 'Error al conectar con el agente redactor', 'error');
   } finally {
     if (tempPaths.length) db.storage.from('prenda-fotos').remove(tempPaths).catch(() => {});
     btn.classList.remove('loading');
@@ -1848,9 +1848,13 @@ async function guardarEditPrenda(id, hasExtras) {
       baja:           estadoVal === 'baja',
       descripcion:    Object.values(_eDesc).some(Boolean) ? JSON.stringify(_eDesc) : null,
       descripcion_publica: document.getElementById('eDescripcionPublica')?.value || null,
-      observaciones:  document.getElementById('eObservaciones')?.value.trim() || null,
       criterios:      _leerCriterios('eCriterios'),
     };
+    // Solo se guarda si el valor original se cargó; así no se borran observaciones existentes
+    const obsEl = document.getElementById('eObservaciones');
+    if (obsEl?.dataset.loaded === '1') {
+      payload.observaciones = obsEl.value.trim() || null;
+    }
     if (hasExtras) {
       payload.numero    = document.getElementById('eId').value.trim()    || null;
       payload.categoria = document.getElementById('eCategoria').value    || null;
