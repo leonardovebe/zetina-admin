@@ -7,7 +7,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
 
-  const { images, contexto = {} } = req.body || {};
+  const { images, contexto = {}, criterios, recientes } = req.body || {};
   if (!Array.isArray(images) || !images.length) {
     return res.status(400).json({ error: 'Se requiere al menos una imagen' });
   }
@@ -54,6 +54,33 @@ module.exports = async function handler(req, res) {
     content.push({
       type: 'text',
       text: `Observaciones del vendedor sobre esta prenda: ${contexto.observaciones}. Tómalas en cuenta para generar una descripción más precisa y útil.`,
+    });
+  }
+
+  const GUIA_CRITERIOS = {
+    diseno:     'Diseño: corte, silueta, detalles y cómo se ve puesta.',
+    calidad:    'Calidad: confección, acabados, caída y durabilidad.',
+    marca:      'Marca: el nombre de la marca, lo que representa y su posicionamiento.',
+    materiales: 'Materiales: tela o piel, composición, textura y cómo se siente.',
+  };
+  const criteriosValidos = Array.isArray(criterios)
+    ? [...new Set(criterios)].filter(c => GUIA_CRITERIOS[c])
+    : [];
+  if (criteriosValidos.length) {
+    const nombres = criteriosValidos.map(c => GUIA_CRITERIOS[c].split(':')[0]).join(', ');
+    content.push({
+      type: 'text',
+      text: `El comprador marcó estos criterios como lo que hace especial a esta prenda: ${nombres}. Enfoca descripcion_publica, por_que_vale y como_presentarla en esos rubros. No hables de los rubros no marcados, salvo que sean evidentes en las fotos.\n\nGuía por rubro:\n${criteriosValidos.map(c => `- ${GUIA_CRITERIOS[c]}`).join('\n')}`,
+    });
+  }
+
+  const recientesValidas = Array.isArray(recientes)
+    ? recientes.filter(r => typeof r === 'string' && r.trim()).slice(0, 5)
+    : [];
+  if (recientesValidas.length) {
+    content.push({
+      type: 'text',
+      text: `Estas son descripciones recientes de otras prendas. No empieces ni estructures la nueva igual que ellas y evita repetir sus giros:\n${recientesValidas.map((r, i) => `${i + 1}. "${r.trim()}"`).join('\n')}`,
     });
   }
 

@@ -378,6 +378,12 @@ async function renderPrendas() {
           </div>
         </div>
 
+        <!-- 9b. Criterios para la IA -->
+        <div class="form-section">
+          <div class="form-section-title">Criterios</div>
+          ${_criteriosHTML('fCriterios')}
+        </div>
+
         <!-- 10. Botón Generar con IA -->
         <div class="ia-btn-row hidden" id="iaBtnRow">
           <button type="button" id="btnGenerarIA" class="btn-ia">
@@ -732,6 +738,51 @@ function _compressImage(file) {
   });
 }
 
+// ── Criterios para la IA (Diseño, Calidad, Marca, Materiales) ──────────────
+const CRITERIOS_PRENDA = [
+  { key: 'diseno',     label: 'Diseño' },
+  { key: 'calidad',    label: 'Calidad' },
+  { key: 'marca',      label: 'Marca' },
+  { key: 'materiales', label: 'Materiales' },
+];
+
+function _criteriosHTML(containerId, seleccionados) {
+  const sel = Array.isArray(seleccionados) ? seleccionados : [];
+  return `
+    <div class="criterios-group" id="${containerId}">
+      <p class="criterios-hint">¿Qué hace especial a esta prenda? La descripción se enfocará en lo que marques.</p>
+      <div class="criterios-options">
+        ${CRITERIOS_PRENDA.map(c => `
+          <label class="criterio-check">
+            <input type="checkbox" value="${c.key}"${sel.includes(c.key) ? ' checked' : ''}>
+            <span>${c.label}</span>
+          </label>`).join('')}
+      </div>
+    </div>`;
+}
+
+function _leerCriterios(containerId) {
+  const marcados = [...document.querySelectorAll(`#${containerId} input[type="checkbox"]:checked`)]
+    .map(cb => cb.value);
+  return marcados.length ? marcados : null;
+}
+
+async function _descripcionesRecientes() {
+  try {
+    const { data, error } = await db.from('prendas')
+      .select('descripcion_publica')
+      .not('descripcion_publica', 'is', null)
+      .neq('descripcion_publica', '')
+      .order('created_at', { ascending: false })
+      .limit(5);
+    if (error) { console.warn('[recientes]', error.message); return []; }
+    return (data || []).map(r => (r.descripcion_publica || '').trim()).filter(Boolean);
+  } catch (err) {
+    console.warn('[recientes]', err.message);
+    return [];
+  }
+}
+
 async function handleGenerarIA() {
   const btn = document.getElementById('btnGenerarIA');
   btn.classList.add('loading');
@@ -772,10 +823,13 @@ async function handleGenerarIA() {
       observaciones: document.getElementById('fObservaciones')?.value.trim() || null,
     };
 
+    const criterios = _leerCriterios('fCriterios');
+    const recientes = await _descripcionesRecientes();
+
     const res = await fetch('/api/generar-descripcion', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ images, contexto }),
+      body: JSON.stringify({ images, contexto, criterios, recientes }),
     });
 
     if (!res.ok) {
@@ -892,6 +946,7 @@ async function handlePrendaSubmit(e) {
       descripcion:       Object.values(_desc).some(Boolean) ? JSON.stringify(_desc) : null,
       descripcion_publica: document.getElementById('fDescripcionPublica')?.value || null,
       observaciones:     document.getElementById('fObservaciones')?.value.trim()   || null,
+      criterios:         _leerCriterios('fCriterios'),
     };
 
     const { data: prenda, error } = await db.from('prendas').insert(prendaData).select().single();
@@ -1272,7 +1327,7 @@ async function abrirEditarPrenda(id) {
 
   // Try fetching with optional columns (numero, categoria); fall back if they don't exist yet
   let p, hasExtras = true;
-  const fullSel = 'id, nombre, marca, color, categoria, departamento, numero, emoji, gradiente, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, medida_3_nombre, medida_3_valor, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, descripcion_publica, fotos_prendas(id, url, orden)';
+  const fullSel = 'id, nombre, marca, color, categoria, departamento, numero, emoji, gradiente, talla_etiqueta, talla_real, medida_1_nombre, medida_1_valor, medida_2_nombre, medida_2_valor, medida_3_nombre, medida_3_valor, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, descripcion_publica, criterios, fotos_prendas(id, url, orden)';
   const safeSel = 'id, nombre, marca, color, emoji, gradiente, talla_etiqueta, talla_real, precio_costo, precio_vendedora, precio_min, precio_max, disponible, baja, vendedora_id, descripcion, fotos_prendas(id, url, orden)';
 
   let { data, error } = await db.from('prendas').select(fullSel).eq('id', id).single();
@@ -1340,6 +1395,10 @@ async function abrirEditarPrenda(id) {
           <label style="font-size:0.8rem;color:var(--text-muted)">Observaciones para la IA</label>
           <textarea id="eObservaciones" rows="2" style="resize:vertical;font-size:0.85rem"
             placeholder="Agrega notas sobre la prenda que ayuden a la IA a generar una mejor descripción. Ej: la tela es muy suave, el corte es generoso, ideal para ocasiones formales...">${escHtml(p.observaciones)}</textarea>
+        </div>
+        <div class="form-group" style="margin-top:10px">
+          <label style="font-size:0.8rem;color:var(--text-muted)">Criterios</label>
+          ${_criteriosHTML('eCriterios', p.criterios)}
         </div>
         <div class="ia-btn-row hidden" id="editIaBtnRow" style="margin-top:10px">
           <button type="button" id="btnEditGenerarIA" class="btn-ia">
@@ -1648,10 +1707,13 @@ async function handleEditGenerarIA() {
       observaciones: document.getElementById('eObservaciones')?.value.trim() || null,
     };
 
+    const criterios = _leerCriterios('eCriterios');
+    const recientes = await _descripcionesRecientes();
+
     const res = await fetch('/api/generar-descripcion', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ images, contexto }),
+      body: JSON.stringify({ images, contexto, criterios, recientes }),
     });
     if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || `Error ${res.status}`); }
 
@@ -1787,6 +1849,7 @@ async function guardarEditPrenda(id, hasExtras) {
       descripcion:    Object.values(_eDesc).some(Boolean) ? JSON.stringify(_eDesc) : null,
       descripcion_publica: document.getElementById('eDescripcionPublica')?.value || null,
       observaciones:  document.getElementById('eObservaciones')?.value.trim() || null,
+      criterios:      _leerCriterios('eCriterios'),
     };
     if (hasExtras) {
       payload.numero    = document.getElementById('eId').value.trim()    || null;
